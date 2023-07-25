@@ -48,25 +48,15 @@ class Bot:
         self.app.add_handler(MessageHandler(Sticker.ALL, self.process_sticker))
         
         
-        #TODO: read captions
         #TODO: write command to show stats for group
         #TODO: write command to show stats for user
         #TODO: write command to show stats for particular word(s)
         #TODO: write command to show tracked users
         #TODO: write command to remove users from tracking
-        #TODO: add setting: if bot's messages should be added to user if bot's message is reply (with replacement, to remove text by voice recognition)
-        #TODO: add setting to read text from other types of media (photos/videos)
-        #TODO: add setting to store type of gif (if it is possible to get its id and then send it)
-        #TODO: add setting to store type of sticker
-        #TODO: add setting to ignore commands
-        #TODO: add setting to ignore posts from channel
         #TODO: add setting to show first names while getting statistics instead of nicknames
         #TODO: add setting to count characters
         #TODO: add achievements (obtained by request/by stats/everyday/right after achievement (?)/check each hour)
 
-        #TODO: add user if not exist and update nickname/first name if different
-        #TODO: try getting message.entities to get link to users without username
-        #TODO: create separate MessageHandler with filters Caption and Text. If caption, check for settings
         #TODO: remove deleted messages
 
         #TODO: add support to count unique gifs - https://docs.python-telegram-bot.org/en/stable/telegram.animation.html#telegram.Animation
@@ -94,6 +84,17 @@ class Bot:
             return True
         except Exception as e:
             print(datetime.now(), f'Cannot create settings for chat {chat_id}: {e}')
+            return False
+
+    def delete_settings(self, chat_id: int):
+        try:
+            cursor = self.db.cursor()
+            cursor.execute("DELETE IGNORE FROM Settings WHERE ChatID=%s;", (chat_id,))
+            self.db.commit()
+            print(datetime.now(), f'Deleted from chat {chat_id}')
+            return True
+        except Exception as e:
+            print(datetime.now(), f'Cannot delete settings for chat {chat_id}: {e}')
             return False
 
     def add_user(self, user_id: int, nickname: str, first_name: str) -> bool:
@@ -189,18 +190,6 @@ class Bot:
         except Exception as e:
             print(datetime.now(), f'Cannot get settings for chat {chat_id}: {e}')
             return None
-
-
-
-    def delete_list(self, list_id: int) -> bool:
-        try:
-            cursor = self.db.cursor()
-            cursor.execute('DELETE FROM List WHERE ID=%s', (list_id,))
-            self.db.commit()
-            return True
-        except Exception as e:
-            print(datetime.now(), f'Cannot delete list {list_id}: {e}')
-            return False
     # endregion
 
 
@@ -233,6 +222,8 @@ class Bot:
         if self.bot_username == chat_member.new_chat_member.user.username:
             if chat_member.new_chat_member.status == ChatMemberStatus.ADMINISTRATOR or chat_member.new_chat_member.status == ChatMemberStatus.MEMBER:
                 self.create_settings(update._effective_chat.id)
+            elif chat_member.new_chat_member.status == ChatMemberStatus.LEFT or chat_member.new_chat_member.status == ChatMemberStatus.BANNED:
+                self.delete_settings(update._effective_chat.id)
 
     def validate_settings(self, update: Update) -> bool:
         # get settings

@@ -1,0 +1,15 @@
+Update(message=Message(channel_chat_created=False, chat=Chat(first_name='Иннокентий', id=313470831, last_name='Предыбалиссимус', type=<ChatType.PRIVATE>, username='DemyDeni'), date=datetime.datetime(2023, 7, 20, 20, 24, 13, tzinfo=datetime.timezone.utc), delete_chat_photo=False, entities=(MessageEntity(length=6, offset=0, type=<MessageEntityType.BOT_COMMAND>),), from_user=User(first_name='Иннокентий', id=313470831, is_bot=False, language_code='en', last_name='Предыбалиссимус', username='DemyDeni'), group_chat_created=False, message_id=5, supergroup_chat_created=False, text='/start'), update_id=199464485)
+
+
+Update(message=Message(channel_chat_created=False, chat=Chat(api_kwargs={'all_members_are_administrators': True}, id=-985802766, title='Stats bot test', type=<ChatType.GROUP>), date=datetime.datetime(2023, 7, 20, 20, 24, 27, tzinfo=datetime.timezone.utc), delete_chat_photo=False, entities=(MessageEntity(length=6, offset=0, type=<MessageEntityType.BOT_COMMAND>),), from_user=User(first_name='Иннокентий', id=313470831, is_bot=False, language_code='en', last_name='Предыбалиссимус', username='DemyDeni'), group_chat_created=False, message_id=7, supergroup_chat_created=False, text='/start'), update_id=199464486)
+
+
+AQADLgcAAmZOCFRy
+AQADzQMAAsKYtVBy
+AgADTSIAAqCBsUk
+AgADZxUAAieN4Us
+AgADgAADarMBCw
+AgADxgUAAj6IGgs
+CgACAgQAAxkBAANzZL_yq_stx02_JimovTqXZa_HPI0AAs0DAA
+CgACAgQAAxkBAAN0ZL_yrRw2vjxHXaOMku8-d3e_kEMAAs0DAA
+CgACAgQAAxkBAAN1ZL_ysI9Nbyotg284Ew0lJ-BRSrcAAs0DAA

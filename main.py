@@ -1,7 +1,7 @@
 from telegram.ext import Application, CommandHandler, ChatMemberHandler, MessageHandler, ContextTypes
 from telegram import Update
 from telegram.constants import ChatMemberStatus
-from telegram.ext.filters import TEXT, PHOTO, VIDEO, ANIMATION, Sticker, VIA_BOT
+from telegram.ext.filters import TEXT, PHOTO, VIDEO, Document, ANIMATION, Sticker, VIA_BOT
 import os
 import mysql.connector
 from mysql.connector import MySQLConnection
@@ -43,7 +43,7 @@ class Bot:
         self.app.add_handler(CommandHandler('shutdown', self.shutdown_command))
         self.app.add_handler(ChatMemberHandler(self.process_new_group_members, Update.chat_member))
         self.app.add_handler(MessageHandler(TEXT | VIA_BOT, self.process_text))
-        self.app.add_handler(MessageHandler(PHOTO | VIDEO, self.process_photo_and_video))
+        self.app.add_handler(MessageHandler(PHOTO | VIDEO | Document.ALL, self.process_photo_video_document))
         self.app.add_handler(MessageHandler(ANIMATION, self.process_gif))
         self.app.add_handler(MessageHandler(Sticker.ALL, self.process_sticker))
         
@@ -78,7 +78,7 @@ class Bot:
     def create_settings(self, chat_id: int):
         try:
             cursor = self.db.cursor()
-            cursor.execute("INSERT IGNORE INTO Settings(ChatID,IgnoreTextFromPhoto,IgnoreTextFromVideo,IgnoreGif,IgnoreStickers,IgnoreChannelPosts)VALUE(%s,0,0,0,0,1);", (chat_id,))
+            cursor.execute("INSERT IGNORE INTO Settings(ChatID,IgnoreTextFromPhoto,IgnoreTextFromVideo,IgnoreTextFromDocument,IgnoreGif,IgnoreStickers,IgnoreChannelPosts)VALUE(%s,0,0,0,0,0,1);", (chat_id,))
             self.db.commit()
             print(datetime.now(), f'Added to chat {chat_id}')
             return True
@@ -184,7 +184,7 @@ class Bot:
     def get_settings(self, chat_id: int):
         try:
             cursor = self.db.cursor()
-            cursor.execute('SELECT IgnoreTextFromPhoto,IgnoreTextFromVideo,IgnoreGif,IgnoreStickers,IgnoreChannelPosts FROM Settings WHERE ChatID=%s;', (chat_id,))
+            cursor.execute('SELECT IgnoreTextFromPhoto,IgnoreTextFromVideo,IgnoreTextFromDocument,IgnoreGif,IgnoreStickers,IgnoreChannelPosts FROM Settings WHERE ChatID=%s;', (chat_id,))
             result = cursor.fetchall()
             return result
         except Exception as e:
@@ -244,16 +244,20 @@ class Bot:
         if (settings[1] and update.message.video):
             return False
         
+        # check if ignore video captions
+        if (settings[2] and update.message.document):
+            return False
+        
         # check if ignore gifs
-        if (settings[2] and update.message.animation):
+        if (settings[3] and update.message.animation):
             return False
         
         # check if ignore stickers
-        if (settings[3] and update.message.sticker):
+        if (settings[4] and update.message.sticker):
             return False
 
         # check if ignore channel posts
-        if (settings[4] and update.message.forward_from_chat):
+        if (settings[5] and update.message.forward_from_chat):
             return False
 
         return True
@@ -268,7 +272,7 @@ class Bot:
         # save words in message to database
         self.add_message_with_words(update.message.date, update.message.chat_id, update.message.from_user.id, update.message.text)
 
-    async def process_photo_and_video(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def process_photo_video_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if (not self.validate_settings(update)):
             return
 

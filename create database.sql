@@ -5,6 +5,7 @@ CREATE TABLE Settings(
     ChatID BIGINT NOT NULL,
     IgnoreTextFromPhoto BIT,
     IgnoreTextFromVideo BIT,
+    IgnoreTextFromDocument BIT,
     IgnoreGif BIT,
     IgnoreStickers BIT,
     IgnoreChannelPosts BIT,
@@ -55,16 +56,3 @@ CREATE TABLE Stickers(
     PRIMARY KEY(StickerUniqueID, StickerID),
     FOREIGN KEY (MessageID) REFERENCES Messages(MessageID) ON DELETE CASCADE
 );
-
-
-
-INSERT IGNORE INTO Settings (ChatID, AddBotsMessagesToUser, BotMessagesRegexps, ReadTextFromPhoto, ReadTextFromVideo, CountGif,CountStickers,IgnoreCommands,IgnoreChannelPosts) VALUE (0, 0, '', 1, 1, 1);
-INSERT IGNORE INTO Users (UserID, Nickname, FirstName) VALUE (0, '@nickname', 'first name');
-INSERT INTO Words (WordID, Word) VALUES (0, 'word') ON DUPLICATE KEY UPDATE WordID=WordID;
-INSERT INTO Messages (Date, ChatID, UserID) VALUE ('01-01-2023', 0, 0);
-INSERT INTO Messages_Words (MessageID, WordID) VALUES (0, 0);
-
-SELECT AddBotsMessagesToUser,BotMessagesRegexps,IgnoreTextFromPhoto,IgnoreTextFromVideo,IgnoreGif,IgnoreStickers,IgnoreCommands,IgnoreChannelPosts FROM Settings WHERE ChatID=0;
-
-
-INSERT INTO Words(WordID,Word)VALUES(-5710977158703794642,'hello') ON DUPLICATE KEY UPDATE WordID=WordID;

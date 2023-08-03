@@ -43,6 +43,7 @@ class Bot:
         self.app.add_handler(CommandHandler('shutdown', self.shutdown_command))
 
         self.app.add_handler(CommandHandler('stats_gif', self.get_stats_for_gif_command))
+        self.app.add_handler(CommandHandler('stats_sticker', self.get_stats_for_sticker_command))
 
         self.app.add_handler(ChatMemberHandler(self.process_new_group_members, Update.chat_member))
         self.app.add_handler(MessageHandler(TEXT | VIA_BOT, self.process_text))
@@ -59,8 +60,6 @@ class Bot:
         #TODO: add setting to show first names while getting statistics instead of nicknames
         #TODO: add setting to count characters
         #TODO: add achievements (obtained by request/by stats/everyday/right after achievement (?)/check each hour)
-
-        #TODO: add support to count unique stickers - https://docs.python-telegram-bot.org/en/stable/telegram.message.html#telegram.Message.sticker
 
 
     def start(self):
@@ -175,17 +174,17 @@ class Bot:
             print(datetime.now(), f'Cannot add message {message_id} on {date} for chat {chat_id} for user {user_id} with gif {gif_unique_id}: {e}')
             return False
 
-    def add_message_with_sticker(self, message_id: int, date: datetime, chat_id: int, user_id: int, sticker_id: str, sticker_unique_id: str) -> bool:
+    def add_message_with_sticker(self, message_id: int, date: datetime, chat_id: int, user_id: int, sticker_unique_id: str, sticker_set_name: str) -> bool:
         if (not self.add_message(message_id, date, chat_id, user_id)):
             return False
         try:
             cursor = self.db.cursor()
             # insert message
-            cursor.execute("INSERT IGNORE INTO Stickers(StickerUniqueID,StickerID,MessageID)VALUE(%s,%s,%s);", (sticker_unique_id, sticker_id, message_id))
+            cursor.execute("INSERT IGNORE INTO Stickers(StickerUniqueID,MessageID,StickerSetName)VALUE(%s,%s,%s);", (sticker_unique_id, message_id, sticker_set_name))
             self.db.commit()
             return True
         except Exception as e:
-            print(datetime.now(), f'Cannot add message {message_id} on {date} for chat {chat_id} for user {user_id} with sticker {sticker_id}: {e}')
+            print(datetime.now(), f'Cannot add message {message_id} on {date} for chat {chat_id} for user {user_id} with sticker {sticker_unique_id}: {e}')
             return False
 
     def get_settings(self, chat_id: int):
@@ -208,6 +207,16 @@ class Bot:
             return result
         except Exception as e:
             print(datetime.now(), f'Cannot get stats for gifs for chat {chat_id}: {e}')
+            return None
+
+    def get_stats_for_sticker(self, chat_id: int):
+        try:
+            cursor = self.db.cursor()
+            cursor.execute('SELECT StickerUniqueID,StickerSetName,COUNT(*) FROM Stickers JOIN Messages ON Stickers.MessageID=Messages.MessageID WHERE Messages.ChatID=%s GROUP BY StickerUniqueID,StickerSetName ORDER BY 3 DESC LIMIT 5;', (chat_id,))
+            result = cursor.fetchall()
+            return result
+        except Exception as e:
+            print(datetime.now(), f'Cannot get stats for stickers for chat {chat_id}: {e}')
             return None
     # endregion
 
@@ -339,20 +348,30 @@ class Bot:
         self.add_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name)
 
         # save words in message to database
-        self.add_message_with_sticker(update.message.id, update.message.date, update.message.chat_id, update.message.from_user.id, update.message.sticker.file_id, update.message.sticker.file_unique_id)
+        self.add_message_with_sticker(update.message.id, update.message.date, update.message.chat_id, update.message.from_user.id, update.message.sticker.file_unique_id, update.message.sticker.set_name)
     # endregion
 
     # region stat commands
     async def get_stats_for_gif_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        # check if such list exists
         gifs = self.get_stats_for_gif(update.message.chat_id)
         if gifs is None:
-            await update.message.reply_text('No gifs')
+            await update.message.reply_text('No gifs sent')
         else:
             message = await update.message.reply_text('Top 5 gifs:')
             for gif in gifs:
                 gif_id = gif[0]
                 await message.reply_animation(open(f'gifs/{gif_id}.mp4', 'rb'), caption=f'Used {gif[1]} times')
+
+    async def get_stats_for_sticker_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        stickers = self.get_stats_for_sticker(update.message.chat_id)
+        if stickers is None:
+            await update.message.reply_text('No stickers sent')
+        else:
+            message = await update.message.reply_text('Top 5 stickers:\n\n' + '\n'.join([f'Used {stk[2]} times' for stk in stickers]))
+            for sticker in stickers:
+                sticker_set = await self.app.bot.get_sticker_set(sticker[1])
+                real_sticker = [stk for stk in sticker_set.stickers if stk.file_unique_id == sticker[0]][0]
+                await message.reply_sticker(real_sticker)
     # endregion
 
 

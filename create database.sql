@@ -50,8 +50,8 @@ CREATE TABLE Gifs(
 
 CREATE TABLE Stickers(
 	StickerUniqueID VARCHAR(20),
-    StickerID VARCHAR(50),
     MessageID BIGINT,
-    PRIMARY KEY(StickerUniqueID, StickerID),
+    StickerSetName VARCHAR(65),
+    PRIMARY KEY(StickerUniqueID, MessageID),
     FOREIGN KEY (MessageID) REFERENCES Messages(MessageID) ON DELETE CASCADE
 );

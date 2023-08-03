@@ -1,5 +1,5 @@
 from telegram.ext import Application, CommandHandler, ChatMemberHandler, MessageHandler, ContextTypes
-from telegram import Update
+from telegram import Update, Message
 from telegram.constants import ChatMemberStatus
 from telegram.ext.filters import TEXT, PHOTO, VIDEO, Document, ANIMATION, Sticker, VIA_BOT
 import os
@@ -129,6 +129,16 @@ class Bot:
             print(datetime.now(), f'Cannot add message on {date} for chat {chat_id} for user {user_id}: {e}')
             return False
 
+    def delete_message(self, message_id: int):
+        try:
+            cursor = self.db.cursor()
+            cursor.execute("DELETE IGNORE FROM Messages WHERE MessageID=%s;", (message_id,))
+            self.db.commit()
+            return True
+        except Exception as e:
+            print(datetime.now(), f'Cannot delete message {message_id}: {e}')
+            return False
+
     def add_message_with_words(self, message_id: int, date: datetime, chat_id: int, user_id: int, message: str) -> bool:
         # split message to words
         words = self.split_message(message)
@@ -222,58 +232,67 @@ class Bot:
             elif chat_member.new_chat_member.status == ChatMemberStatus.LEFT or chat_member.new_chat_member.status == ChatMemberStatus.BANNED:
                 self.delete_settings(update._effective_chat.id)
 
-    def validate_settings(self, update: Update) -> bool:
+    def validate_settings(self, message: Message) -> bool:
         # get settings
-        settings = self.get_settings(update.message.chat_id)
+        settings = self.get_settings(message.chat_id)
         if (settings is None):
             return False
         settings = settings[0]
 
         # ignore commands
-        if (update.message.text and update.message.text.startswith('/')):
+        if (message.text and message.text.startswith('/')):
             return False
 
         # check if ignore photo captions
-        if (settings[0] and len(update.message.photo) > 0):
+        if (settings[0] and len(message.photo) > 0):
             return False
         
         # check if ignore video captions
-        if (settings[1] and update.message.video):
+        if (settings[1] and message.video):
             return False
         
         # check if ignore video captions
-        if (settings[2] and update.message.document):
+        if (settings[2] and message.document):
             return False
         
         # check if ignore gifs
-        if (settings[3] and update.message.animation):
+        if (settings[3] and message.animation):
             return False
         
         # check if ignore stickers
-        if (settings[4] and update.message.sticker):
+        if (settings[4] and message.sticker):
             return False
 
         # check if ignore channel posts
-        if (settings[5] and update.message.forward_from_chat):
+        if (settings[5] and message.forward_from_chat):
             return False
 
         return True
 
     async def process_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if (not self.validate_settings(update)):
-            return
-
         if (update.message):
+            if (not self.validate_settings(update.message)):
+                return
+
             # try adding user
             self.add_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name)
 
             # save words in message to database
             self.add_message_with_words(update.message.id, update.message.date, update.message.chat_id, update.message.from_user.id, update.message.text)
         elif (update.edited_message):
-            pass
+            if (not self.validate_settings(update.edited_message)):
+                return
+
+            # try adding user
+            self.add_user(update.edited_message.from_user.id, update.edited_message.from_user.username, update.edited_message.from_user.first_name)
+            
+            # delete message
+            self.delete_message(update.edited_message.message_id)
+            # save words in message to database
+            self.add_message_with_words(update.edited_message.message_id, update.edited_message.edit_date, update.edited_message.chat_id, update.edited_message.from_user.id, update.edited_message.text)
 
     async def process_photo_video_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if (not self.validate_settings(update)):
+        if (not self.validate_settings(update.message)):
             return
 
         # try adding user
@@ -283,7 +302,7 @@ class Bot:
         self.add_message_with_words(update.message.id, update.message.date, update.message.chat_id, update.message.from_user.id, update.message.caption)
 
     async def process_gif(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if (not self.validate_settings(update)):
+        if (not self.validate_settings(update.message)):
             return
 
         # try adding user
@@ -293,7 +312,7 @@ class Bot:
         self.add_message_with_gif(update.message.id, update.message.date, update.message.chat_id, update.message.from_user.id, update.message.animation.file_id, update.message.animation.file_unique_id)
 
     async def process_sticker(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if (not self.validate_settings(update)):
+        if (not self.validate_settings(update.message)):
             return
 
         # try adding user
@@ -307,4 +326,3 @@ class Bot:
 if __name__ == '__main__':
     bot = Bot()
     bot.start()
-

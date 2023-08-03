@@ -41,23 +41,24 @@ class Bot:
         self.app.add_handler(CommandHandler('start', self.start_command))
         self.app.add_handler(CommandHandler('help', self.help_command))
         self.app.add_handler(CommandHandler('shutdown', self.shutdown_command))
+
+        self.app.add_handler(CommandHandler('stats_gif', self.get_stats_for_gif_command))
+
         self.app.add_handler(ChatMemberHandler(self.process_new_group_members, Update.chat_member))
         self.app.add_handler(MessageHandler(TEXT | VIA_BOT, self.process_text))
         self.app.add_handler(MessageHandler(ANIMATION, self.process_gif))
         self.app.add_handler(MessageHandler(Sticker.ALL, self.process_sticker))
         self.app.add_handler(MessageHandler(PHOTO | VIDEO | Document.ALL, self.process_photo_video_document))
+
         
         
         #TODO: write command to show stats for group
         #TODO: write command to show stats for user
         #TODO: write command to show stats for particular word(s)
         #TODO: write command to show tracked users
-        #TODO: write command to remove users from tracking
         #TODO: add setting to show first names while getting statistics instead of nicknames
         #TODO: add setting to count characters
         #TODO: add achievements (obtained by request/by stats/everyday/right after achievement (?)/check each hour)
-
-        #TODO: remove deleted messages
 
         #TODO: add support to count unique gifs - https://docs.python-telegram-bot.org/en/stable/telegram.animation.html#telegram.Animation
         #TODO: add support to count unique stickers - https://docs.python-telegram-bot.org/en/stable/telegram.message.html#telegram.Message.sticker
@@ -74,7 +75,7 @@ class Bot:
         # split into words
         return re.findall(self.pattern_word, message_no_url)
 
-    # region database
+    # region database settings and adding messages
     def create_settings(self, chat_id: int):
         try:
             cursor = self.db.cursor()
@@ -162,17 +163,17 @@ class Bot:
             print(datetime.now(), f'Cannot add message {message_id} on {date} for chat {chat_id}, user {user_id} and words {words}: {e}')
             return False
 
-    def add_message_with_gif(self, message_id: int, date: datetime, chat_id: int, user_id: int, gif_id: str, gif_unique_id: str) -> bool:
+    def add_message_with_gif(self, message_id: int, date: datetime, chat_id: int, user_id: int, gif_unique_id: str) -> bool:
         if (not self.add_message(message_id, date, chat_id, user_id)):
             return False
         try:
             cursor = self.db.cursor()
             # insert message
-            cursor.execute("INSERT IGNORE INTO Gifs(GifUniqueID,GifID,MessageID)VALUE(%s,%s,%s);", (gif_unique_id, gif_id, message_id))
+            cursor.execute("INSERT IGNORE INTO Gifs(GifUniqueID,MessageID)VALUE(%s,%s);", (gif_unique_id, message_id))
             self.db.commit()
             return True
         except Exception as e:
-            print(datetime.now(), f'Cannot add message {message_id} on {date} for chat {chat_id} for user {user_id} with gif {gif_id}: {e}')
+            print(datetime.now(), f'Cannot add message {message_id} on {date} for chat {chat_id} for user {user_id} with gif {gif_unique_id}: {e}')
             return False
 
     def add_message_with_sticker(self, message_id: int, date: datetime, chat_id: int, user_id: int, sticker_id: str, sticker_unique_id: str) -> bool:
@@ -199,6 +200,26 @@ class Bot:
             return None
     # endregion
 
+    # region statistics
+    def get_stats_for_gif(self, chat_id: int):
+        try:
+            cursor = self.db.cursor()
+            cursor.execute('SELECT GifUniqueID, COUNT(*) FROM Gifs JOIN Messages ON Gifs.MessageID = Messages.MessageID WHERE Messages.ChatID = %s GROUP BY GifUniqueID ORDER BY 2 DESC LIMIT 5;', (chat_id,))
+            result = cursor.fetchall()
+            return result
+        except Exception as e:
+            print(datetime.now(), f'Cannot get stats for gifs for chat {chat_id}: {e}')
+            return None
+    # endregion
+
+
+    async def download_gif(self, file_id: str, file_unique_id: str):
+        file = await self.app.bot.get_file(file_id)
+        file_path = f'gifs/{file_unique_id}.mp4'
+        if not os.path.exists(file_path):
+            os.mkdir(file_path)
+            await file.download_to_drive(file_path)
+
 
     # region default commands
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -212,7 +233,6 @@ class Bot:
     async def error(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(datetime.now(), f'Update {update} caused error {context.error}')
     # endregion
-
 
     # region commands
     async def shutdown_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -309,7 +329,9 @@ class Bot:
         self.add_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name)
 
         # save gif in message to database
-        self.add_message_with_gif(update.message.id, update.message.date, update.message.chat_id, update.message.from_user.id, update.message.animation.file_id, update.message.animation.file_unique_id)
+        self.add_message_with_gif(update.message.id, update.message.date, update.message.chat_id, update.message.from_user.id, update.message.animation.file_unique_id)
+
+        await self.download_gif(update.message.animation.file_id, update.message.animation.file_unique_id)
 
     async def process_sticker(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if (not self.validate_settings(update.message)):
@@ -320,6 +342,19 @@ class Bot:
 
         # save words in message to database
         self.add_message_with_sticker(update.message.id, update.message.date, update.message.chat_id, update.message.from_user.id, update.message.sticker.file_id, update.message.sticker.file_unique_id)
+    # endregion
+
+    # region stat commands
+    async def get_stats_for_gif_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        # check if such list exists
+        gifs = self.get_stats_for_gif(update.message.chat_id)
+        if gifs is None:
+            await update.message.reply_text('No gifs')
+        else:
+            message = await update.message.reply_text('Top 5 gifs:')
+            for gif in gifs:
+                gif_id = gif[0]
+                await message.reply_animation(open(f'files/{gif_id}.mp4', 'rb'), caption=f'Used {gif[1]} times')
     # endregion
 
 

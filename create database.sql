@@ -43,9 +43,8 @@ CREATE TABLE Messages_Words(
 
 CREATE TABLE Gifs(
 	GifUniqueID VARCHAR(20),
-    GifID VARCHAR(50),
     MessageID BIGINT,
-    PRIMARY KEY(GifUniqueID, GifID),
+    PRIMARY KEY(GifUniqueID, MessageID),
     FOREIGN KEY (MessageID) REFERENCES Messages(MessageID) ON DELETE CASCADE
 );
 

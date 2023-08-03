@@ -1,5 +1,5 @@
-from telegram.ext import Application, CommandHandler, ChatMemberHandler, MessageHandler, ContextTypes
-from telegram import Update, Message, Animation
+from telegram.ext import Application, CommandHandler, ChatMemberHandler, MessageHandler, ContextTypes, CallbackQueryHandler
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, Message, Animation
 from telegram.constants import ChatMemberStatus
 from telegram.ext.filters import TEXT, PHOTO, VIDEO, Document, ANIMATION, Sticker, VIA_BOT
 import os
@@ -38,9 +38,13 @@ class Bot:
         self.app = Application.builder().token(os.getenv('words_stats_bot_token')).build()
 
         self.app.add_error_handler(self.error)
+
         self.app.add_handler(CommandHandler('start', self.start_command))
         self.app.add_handler(CommandHandler('help', self.help_command))
         self.app.add_handler(CommandHandler('shutdown', self.shutdown_command))
+
+        self.app.add_handler(CommandHandler("stats", self.get_stats_command))
+        self.app.add_handler(CallbackQueryHandler(self.get_stats_buttons))
 
         self.app.add_handler(CommandHandler('stats_gif', self.get_stats_for_gif_command))
         self.app.add_handler(CommandHandler('stats_sticker', self.get_stats_for_sticker_command))
@@ -51,8 +55,7 @@ class Bot:
         self.app.add_handler(MessageHandler(Sticker.ALL, self.process_sticker))
         self.app.add_handler(MessageHandler(PHOTO | VIDEO | Document.ALL, self.process_photo_video_document))
 
-        
-        
+
         #TODO: write command to show stats for group
         #TODO: write command to show stats for user
         #TODO: write command to show stats for particular word(s)
@@ -60,6 +63,10 @@ class Bot:
         #TODO: add setting to show first names while getting statistics instead of nicknames
         #TODO: add setting to count characters
         #TODO: add achievements (obtained by request/by stats/everyday/right after achievement (?)/check each hour)
+        #TODO: add statistics for number of voice messages
+        #TODO: save queries to get stats as functions in MySQL
+        #TODO: add 1 minute limit between requests to prevent time out
+        #TODO: choose how much top words to show
 
 
     def start(self):
@@ -72,6 +79,7 @@ class Bot:
         message_no_url = re.sub(self.pattern_url, '', message.lower())
         # split into words
         return re.findall(self.pattern_word, message_no_url)
+
 
     # region database settings and adding messages
     def create_settings(self, chat_id: int):
@@ -366,6 +374,83 @@ class Bot:
                 real_sticker = [stk for stk in sticker_set.stickers if stk.file_unique_id == sticker[0]][0]
                 await message.reply_sticker(real_sticker)
     # endregion
+
+    async def get_stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        keyboard = [
+            [
+                InlineKeyboardButton("All", callback_data="start-all"),
+                InlineKeyboardButton("User", callback_data="start-user")
+            ]
+        ]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text("Get stats for:", reply_markup=reply_markup)
+
+    async def get_stats_buttons(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        response = query.data
+        responses = response.split('|')
+
+        #TODO: reformat, create mappings using classes, split into methods
+        state_type = [
+            [InlineKeyboardButton("Words", callback_data=response + "|type-word")],
+            [InlineKeyboardButton("Gifs", callback_data=response + "|type-gif")],
+            [InlineKeyboardButton("Stickers", callback_data=response + "|type-sticker")]
+        ]
+
+        state_time = [
+            [InlineKeyboardButton("All time", callback_data=response + "|time-all")],
+            [InlineKeyboardButton("Last year", callback_data=response + "|time-year")],
+            [InlineKeyboardButton("Last month", callback_data=response + "|time-month")],
+            [InlineKeyboardButton("Last week", callback_data=response + "|time-week")],
+            [InlineKeyboardButton("Last day", callback_data=response + "|time-day")]
+        ]
+
+        reply_markup = None
+        if responses[0] == 'start-all':
+            if len(responses) >= 2:
+                if len(responses) >= 3:
+                    if responses[1] == 'type-word':
+                        pass
+                    if responses[1] == 'type-gif':
+                        await query.answer()
+                        if responses[2] == 'time-all':
+                            gifs = self.get_stats_for_gif(query.message.chat_id)
+                            if gifs is None:
+                                await query.edit_message_text('No gifs sent')
+                            else:
+                                message = await query.edit_message_text('Top 5 gifs for all users for all time:')
+                                for gif in gifs:
+                                    gif_id = await self.app.bot.get_file(gif[2])
+                                    anim = Animation(file_unique_id=gif[1], file_id=gif_id.file_id, duration=gif[3], height=gif[4], width=gif[5])
+                                    await message.reply_animation(anim, caption=f'Used {gif[0]} times')
+                            return
+                    if responses[1] == 'type-sticker':
+                        await query.answer()
+                        if responses[2] == 'time-all':
+                            stickers = self.get_stats_for_sticker(query.message.chat_id)
+                            if stickers is None:
+                                await query.edit_message_text('No stickers sent')
+                            else:
+                                message = await query.edit_message_text('Top 5 stickers for all users for all time:\n\n' + '\n'.join([f'Used {stk[2]} times' for stk in stickers]))
+                                for sticker in stickers:
+                                    sticker_set = await self.app.bot.get_sticker_set(sticker[1])
+                                    real_sticker = [stk for stk in sticker_set.stickers if stk.file_unique_id == sticker[0]][0]
+                                    await message.reply_sticker(real_sticker)
+                            return
+                else:
+                    reply_markup = InlineKeyboardMarkup(state_time)
+            else:
+                reply_markup = InlineKeyboardMarkup(state_type)
+        elif responses[0] == 'start-user':
+            pass
+
+
+        if reply_markup is None:
+            await query.answer()
+            await query.edit_message_text(text='An error occurred. Please try again')
+        else:
+            await query.edit_message_text(text='Get stats for:', reply_markup=reply_markup)
 
 
 if __name__ == '__main__':

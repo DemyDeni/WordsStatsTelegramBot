@@ -60,7 +60,6 @@ class Bot:
         #TODO: add setting to count characters
         #TODO: add achievements (obtained by request/by stats/everyday/right after achievement (?)/check each hour)
 
-        #TODO: add support to count unique gifs - https://docs.python-telegram-bot.org/en/stable/telegram.animation.html#telegram.Animation
         #TODO: add support to count unique stickers - https://docs.python-telegram-bot.org/en/stable/telegram.message.html#telegram.Message.sticker
 
 
@@ -213,22 +212,21 @@ class Bot:
     # endregion
 
 
+    # region downloaders
     async def download_gif(self, file_id: str, file_unique_id: str):
         file = await self.app.bot.get_file(file_id)
         file_path = f'gifs/{file_unique_id}.mp4'
         if not os.path.exists(file_path):
-            os.mkdir(file_path)
             await file.download_to_drive(file_path)
+    # endregion
 
 
     # region default commands
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text('Hello')
 
-
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text('Help')
-
 
     async def error(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(datetime.now(), f'Update {update} caused error {context.error}')
@@ -354,10 +352,12 @@ class Bot:
             message = await update.message.reply_text('Top 5 gifs:')
             for gif in gifs:
                 gif_id = gif[0]
-                await message.reply_animation(open(f'files/{gif_id}.mp4', 'rb'), caption=f'Used {gif[1]} times')
+                await message.reply_animation(open(f'gifs/{gif_id}.mp4', 'rb'), caption=f'Used {gif[1]} times')
     # endregion
 
 
 if __name__ == '__main__':
+    if not os.path.exists('gifs'):
+        os.mkdir('gifs')
     bot = Bot()
     bot.start()

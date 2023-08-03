@@ -1,5 +1,5 @@
 from telegram.ext import Application, CommandHandler, ChatMemberHandler, MessageHandler, ContextTypes
-from telegram import Update, Message
+from telegram import Update, Message, Animation
 from telegram.constants import ChatMemberStatus
 from telegram.ext.filters import TEXT, PHOTO, VIDEO, Document, ANIMATION, Sticker, VIA_BOT
 import os
@@ -161,13 +161,13 @@ class Bot:
             print(datetime.now(), f'Cannot add message {message_id} on {date} for chat {chat_id}, user {user_id} and words {words}: {e}')
             return False
 
-    def add_message_with_gif(self, message_id: int, date: datetime, chat_id: int, user_id: int, gif_unique_id: str) -> bool:
+    def add_message_with_gif(self, message_id: int, date: datetime, chat_id: int, user_id: int, gif_unique_id: str, gif_id: str, duration: int, height: int, width: int) -> bool:
         if (not self.add_message(message_id, date, chat_id, user_id)):
             return False
         try:
             cursor = self.db.cursor()
             # insert message
-            cursor.execute("INSERT IGNORE INTO Gifs(GifUniqueID,MessageID)VALUE(%s,%s);", (gif_unique_id, message_id))
+            cursor.execute("INSERT IGNORE INTO Gifs(GifUniqueID,MessageID,GifID,Duration,Height,Width)VALUE(%s,%s,%s,%s,%s,%s);", (gif_unique_id, message_id, gif_id, duration, height, width))
             self.db.commit()
             return True
         except Exception as e:
@@ -202,7 +202,7 @@ class Bot:
     def get_stats_for_gif(self, chat_id: int):
         try:
             cursor = self.db.cursor()
-            cursor.execute('SELECT GifUniqueID, COUNT(*) FROM Gifs JOIN Messages ON Gifs.MessageID = Messages.MessageID WHERE Messages.ChatID = %s GROUP BY GifUniqueID ORDER BY 2 DESC LIMIT 5;', (chat_id,))
+            cursor.execute('SELECT GifCount,GifUniqueID,GifID,Duration,Height,Width FROM(SELECT g.*,ROW_NUMBER()OVER(PARTITION BY GifUniqueID ORDER BY MessageID) AS row_num,GifCount FROM Gifs g INNER JOIN(SELECT GifUniqueID,COUNT(*) AS GifCount FROM Gifs g JOIN Messages m ON g.MessageID=m.MessageID WHERE m.ChatID=%s GROUP BY GifUniqueID ORDER BY GifCount DESC LIMIT 5)TopGifs ON G.GifUniqueID=TopGifs.GifUniqueID)g WHERE g.row_num=1 ORDER BY GifCount DESC;', (chat_id,))
             result = cursor.fetchall()
             return result
         except Exception as e:
@@ -218,15 +218,6 @@ class Bot:
         except Exception as e:
             print(datetime.now(), f'Cannot get stats for stickers for chat {chat_id}: {e}')
             return None
-    # endregion
-
-
-    # region downloaders
-    async def download_gif(self, file_id: str, file_unique_id: str):
-        file = await self.app.bot.get_file(file_id)
-        file_path = f'gifs/{file_unique_id}.mp4'
-        if not os.path.exists(file_path):
-            await file.download_to_drive(file_path)
     # endregion
 
 
@@ -336,9 +327,10 @@ class Bot:
         self.add_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name)
 
         # save gif in message to database
-        self.add_message_with_gif(update.message.id, update.message.date, update.message.chat_id, update.message.from_user.id, update.message.animation.file_unique_id)
+        self.add_message_with_gif(update.message.id, update.message.date, update.message.chat_id, update.message.from_user.id, update.message.animation.file_unique_id,
+                                  update.message.animation.file_id, update.message.animation.duration, update.message.animation.height, update.message.animation.width)
 
-        await self.download_gif(update.message.animation.file_id, update.message.animation.file_unique_id)
+        # await self.download_gif(update.message.animation.file_id, update.message.animation.file_unique_id)
 
     async def process_sticker(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if (not self.validate_settings(update.message)):
@@ -359,8 +351,9 @@ class Bot:
         else:
             message = await update.message.reply_text('Top 5 gifs:')
             for gif in gifs:
-                gif_id = gif[0]
-                await message.reply_animation(open(f'gifs/{gif_id}.mp4', 'rb'), caption=f'Used {gif[1]} times')
+                gif_id = await self.app.bot.get_file(gif[2])
+                anim = Animation(file_unique_id=gif[1], file_id=gif_id.file_id, duration=gif[3], height=gif[4], width=gif[5])
+                await message.reply_animation(anim, caption=f'Used {gif[0]} times')
 
     async def get_stats_for_sticker_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         stickers = self.get_stats_for_sticker(update.message.chat_id)
@@ -376,7 +369,5 @@ class Bot:
 
 
 if __name__ == '__main__':
-    if not os.path.exists('gifs'):
-        os.mkdir('gifs')
     bot = Bot()
     bot.start()

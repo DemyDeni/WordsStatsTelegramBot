@@ -43,9 +43,9 @@ class Bot:
         self.app.add_handler(CommandHandler('shutdown', self.shutdown_command))
         self.app.add_handler(ChatMemberHandler(self.process_new_group_members, Update.chat_member))
         self.app.add_handler(MessageHandler(TEXT | VIA_BOT, self.process_text))
-        self.app.add_handler(MessageHandler(PHOTO | VIDEO | Document.ALL, self.process_photo_video_document))
         self.app.add_handler(MessageHandler(ANIMATION, self.process_gif))
         self.app.add_handler(MessageHandler(Sticker.ALL, self.process_sticker))
+        self.app.add_handler(MessageHandler(PHOTO | VIDEO | Document.ALL, self.process_photo_video_document))
         
         
         #TODO: write command to show stats for group
@@ -118,25 +118,24 @@ class Bot:
             print(datetime.now(), f'Cannot add words {words}: {e}')
             return False
 
-    def add_message(self, date: datetime, chat_id: int, user_id: int):
+    def add_message(self, message_id: int, date: datetime, chat_id: int, user_id: int) -> bool:
         try:
             cursor = self.db.cursor()
             # insert message
-            cursor.execute("INSERT INTO Messages(Date,ChatID,UserID)VALUE(%s,%s,%s);", (date, chat_id, user_id))
+            cursor.execute("INSERT INTO Messages(MessageID,Date,ChatID,UserID)VALUE(%s,%s,%s,%s);", (message_id, date, chat_id, user_id))
             self.db.commit()
-            return cursor.lastrowid
+            return True
         except Exception as e:
             print(datetime.now(), f'Cannot add message on {date} for chat {chat_id} for user {user_id}: {e}')
-            return None
+            return False
 
-    def add_message_with_words(self, date: datetime, chat_id: int, user_id: int, message: str) -> bool:
+    def add_message_with_words(self, message_id: int, date: datetime, chat_id: int, user_id: int, message: str) -> bool:
         # split message to words
         words = self.split_message(message)
         if (len(words) == 0):
             return False
 
-        message_id = self.add_message(date, chat_id, user_id)
-        if (message_id is None):
+        if (not self.add_message(message_id, date, chat_id, user_id)):
             return False
 
         # try adding words to database
@@ -153,9 +152,8 @@ class Bot:
             print(datetime.now(), f'Cannot add message {message_id} on {date} for chat {chat_id}, user {user_id} and words {words}: {e}')
             return False
 
-    def add_message_with_gif(self, date: datetime, chat_id: int, user_id: int, gif_id: str, gif_unique_id: str) -> bool:
-        message_id = self.add_message(date, chat_id, user_id)
-        if (message_id is None):
+    def add_message_with_gif(self, message_id: int, date: datetime, chat_id: int, user_id: int, gif_id: str, gif_unique_id: str) -> bool:
+        if (not self.add_message(message_id, date, chat_id, user_id)):
             return False
         try:
             cursor = self.db.cursor()
@@ -167,9 +165,8 @@ class Bot:
             print(datetime.now(), f'Cannot add message {message_id} on {date} for chat {chat_id} for user {user_id} with gif {gif_id}: {e}')
             return False
 
-    def add_message_with_sticker(self, date: datetime, chat_id: int, user_id: int, sticker_id: str, sticker_unique_id: str) -> bool:
-        message_id = self.add_message(date, chat_id, user_id)
-        if (message_id is None):
+    def add_message_with_sticker(self, message_id: int, date: datetime, chat_id: int, user_id: int, sticker_id: str, sticker_unique_id: str) -> bool:
+        if (not self.add_message(message_id, date, chat_id, user_id)):
             return False
         try:
             cursor = self.db.cursor()
@@ -266,11 +263,14 @@ class Bot:
         if (not self.validate_settings(update)):
             return
 
-        # try adding user
-        self.add_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name)
+        if (update.message):
+            # try adding user
+            self.add_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name)
 
-        # save words in message to database
-        self.add_message_with_words(update.message.date, update.message.chat_id, update.message.from_user.id, update.message.text)
+            # save words in message to database
+            self.add_message_with_words(update.message.id, update.message.date, update.message.chat_id, update.message.from_user.id, update.message.text)
+        elif (update.edited_message):
+            pass
 
     async def process_photo_video_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if (not self.validate_settings(update)):
@@ -280,7 +280,7 @@ class Bot:
         self.add_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name)
 
         # save words in message to database
-        self.add_message_with_words(update.message.date, update.message.chat_id, update.message.from_user.id, update.message.caption)
+        self.add_message_with_words(update.message.id, update.message.date, update.message.chat_id, update.message.from_user.id, update.message.caption)
 
     async def process_gif(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if (not self.validate_settings(update)):
@@ -290,7 +290,7 @@ class Bot:
         self.add_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name)
 
         # save gif in message to database
-        self.add_message_with_gif(update.message.date, update.message.chat_id, update.message.from_user.id, update.message.animation.file_id, update.message.animation.file_unique_id)
+        self.add_message_with_gif(update.message.id, update.message.date, update.message.chat_id, update.message.from_user.id, update.message.animation.file_id, update.message.animation.file_unique_id)
 
     async def process_sticker(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if (not self.validate_settings(update)):
@@ -300,7 +300,7 @@ class Bot:
         self.add_user(update.message.from_user.id, update.message.from_user.username, update.message.from_user.first_name)
 
         # save words in message to database
-        self.add_message_with_sticker(update.message.date, update.message.chat_id, update.message.from_user.id, update.message.sticker.file_id, update.message.sticker.file_unique_id)
+        self.add_message_with_sticker(update.message.id, update.message.date, update.message.chat_id, update.message.from_user.id, update.message.sticker.file_id, update.message.sticker.file_unique_id)
     # endregion
 
 

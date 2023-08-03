@@ -2,7 +2,7 @@ CREATE DATABASE words_stats_telegram_bot;
 USE words_stats_telegram_bot;
 
 CREATE TABLE Settings(
-    ChatID BIGINT NOT NULL,
+    ChatID BIGINT,
     IgnoreTextFromPhoto BIT,
     IgnoreTextFromVideo BIT,
     IgnoreTextFromDocument BIT,
@@ -13,7 +13,7 @@ CREATE TABLE Settings(
 );
 
 CREATE TABLE Users(
-    UserID BIGINT NOT NULL,
+    UserID BIGINT,
     Nickname VARCHAR(32) UNIQUE,
     FirstName VARCHAR(64),
     PRIMARY KEY (UserID)
@@ -26,7 +26,7 @@ CREATE TABLE Words(
 );
 
 CREATE TABLE Messages(
-    MessageID BIGINT NOT NULL AUTO_INCREMENT,
+    MessageID BIGINT,
     Date DATETIME,
     ChatID BIGINT,
     UserID BIGINT,

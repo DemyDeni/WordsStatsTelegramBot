@@ -226,6 +226,19 @@ class Bot:
     # endregion
 
     # region statistics
+    def get_stats_for_words(self, chat_id: int, user_id: int, start: datetime, end: datetime):
+        try:
+            cursor = self.db.cursor()
+            if user_id is None:
+                cursor.execute('SELECT w.Word,COUNT(*) FROM Messages m JOIN Messages_Words mw ON m.MessageID=mw.MessageID JOIN Words w ON mw.WordID=w.WordID WHERE m.ChatID=%s AND m.Date>=%s AND m.Date<=%s GROUP BY w.WordID ORDER BY 2 DESC LIMIT 20;', (chat_id,start,end))
+            else:
+                cursor.execute('SELECT w.Word,COUNT(*) FROM Messages m JOIN Messages_Words mw ON m.MessageID=mw.MessageID JOIN Words w ON mw.WordID=w.WordID WHERE m.ChatID=%s AND m.UserID=%s AND m.Date>=%s AND m.Date<=%s GROUP BY w.WordID ORDER BY 2 DESC LIMIT 20;', (chat_id,user_id,start,end))
+            result = cursor.fetchall()
+            return result
+        except Exception as e:
+            print(datetime.now(), f'Cannot get stats for words for chat {chat_id}, user {user_id} before {start} and {end}: {e}')
+            return None
+
     def get_stats_for_gif(self, chat_id: int, user_id: int, start: datetime, end: datetime):
         try:
             cursor = self.db.cursor()
@@ -236,7 +249,7 @@ class Bot:
             result = cursor.fetchall()
             return result
         except Exception as e:
-            print(datetime.now(), f'Cannot get stats for gifs for chat {chat_id}: {e}')
+            print(datetime.now(), f'Cannot get stats for gifs for chat {chat_id}, user {user_id} before {start} and {end}: {e}')
             return None
 
     def get_stats_for_sticker(self, chat_id: int, user_id: int, start: datetime, end: datetime):
@@ -519,6 +532,14 @@ class Bot:
             await self.show_statistics_for_stickers(update, type, time, user, user_name)
 
     async def show_statistics_for_words(self, update: Update, type: str, time: str, user, user_name: str) -> None:
+        start, end = self.get_time(time)
+        words = self.get_stats_for_words(update.callback_query.message.chat_id, user, start, end)
+        if words is None or len(words) == 0:
+            await update.callback_query.edit_message_text(f"{'No one' if user_name == 'all' else user_name} has not said any word during {self.get_desc_time(time)}")
+        else:
+            await update.callback_query.edit_message_text(f"Top 20 {self.get_desc_type(type)} for {self.get_desc_time(time)} for {'everyone' if user_name == 'all' else user_name} (number:word):\n\n" + 
+                                                          '\n'.join([f"{word[1]}: {word[0]}" for word in words]))
+
         await update.callback_query.answer()
 
     async def show_statistics_for_gifs(self, update: Update, type: str, time: str, user, user_name: str) -> None:

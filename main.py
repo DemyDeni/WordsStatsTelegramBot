@@ -54,18 +54,12 @@ class Bot:
         self.app.add_handler(MessageHandler(PHOTO | VIDEO | Document.ALL, self.process_photo_video_document))
 
 
-        #TODO: write command to show stats for group
-        #TODO: write command to show stats for user
-        #TODO: write command to show stats for particular word(s)
-        #TODO: write command to show tracked users
-        #TODO: add setting to show first names while getting statistics instead of nicknames
-        #TODO: add setting to count characters
+        #TODO: add setting to show first names or nicknames while getting statistics
         #TODO: add achievements (obtained by request/by stats/everyday/right after achievement (?)/check each hour)
         #TODO: add statistics for number of voice messages
-        #TODO: save queries to get stats as functions in MySQL
-        #TODO: add 1 minute limit between requests to prevent time out
         #TODO: choose how much top words to show
-        #TODO: count replies
+        #TODO: add statistics for number of replies
+        #TODO: add full statistics for the user
 
 
     def start(self):
@@ -239,6 +233,19 @@ class Bot:
             print(datetime.now(), f'Cannot get stats for words for chat {chat_id}, user {user_id} before {start} and {end}: {e}')
             return None
 
+    def get_stats_for_characters(self, chat_id: int, user_id: int, start: datetime, end: datetime):
+        try:
+            cursor = self.db.cursor()
+            if user_id is None:
+                cursor.execute('SELECT SUM(CHAR_LENGTH(w.Word)) FROM Messages m JOIN Messages_Words mw ON m.MessageID=mw.MessageID JOIN Words w ON mw.WordID=w.WordID WHERE m.ChatID=%s AND m.Date>=%s AND m.Date<=%s;', (chat_id,start,end))
+            else:
+                cursor.execute('SELECT SUM(CHAR_LENGTH(w.Word)) FROM Messages m JOIN Messages_Words mw ON m.MessageID=mw.MessageID JOIN Words w ON mw.WordID=w.WordID WHERE m.ChatID=%s AND m.UserID=%s AND m.Date>=%s AND m.Date<=%s;', (chat_id,user_id,start,end))
+            result = cursor.fetchone()[0]
+            return result
+        except Exception as e:
+            print(datetime.now(), f'Cannot get stats for characters for chat {chat_id}, user {user_id} before {start} and {end}: {e}')
+            return None
+
     def get_stats_for_gif(self, chat_id: int, user_id: int, start: datetime, end: datetime):
         try:
             cursor = self.db.cursor()
@@ -391,22 +398,25 @@ class Bot:
 
     # region stat commands
     def get_desc_type(self, type: str) -> str:
-        return type
+        if type == 'word': return 'words'
+        elif type == 'char': return 'characters'
+        elif type == 'gif': return 'gifs'
+        elif type == 'sticker': return 'stickers'
 
     def get_desc_time(self, time: str) -> str:
         if time == 'all': return 'all time'
-        if time == 'last-year': return 'last year'
-        if time == 'last-month': return 'last month'
-        if time == 'last-week': return 'last week'
-        if time == 'last-day': return 'last day'
-        if time == 'prev-year': return 'previous year'
-        if time == 'prev-month': return 'previous month'
-        if time == 'prev-week': return 'previous week'
-        if time == 'prev-day': return 'previous day'
-        if time == 'this-year': return 'this year'
-        if time == 'this-month': return 'this month'
-        if time == 'this-week': return 'this week'
-        if time == 'this-day': return 'this day'
+        elif time == 'last-year': return 'last year'
+        elif time == 'last-month': return 'last month'
+        elif time == 'last-week': return 'last week'
+        elif time == 'last-day': return 'last day'
+        elif time == 'prev-year': return 'previous year'
+        elif time == 'prev-month': return 'previous month'
+        elif time == 'prev-week': return 'previous week'
+        elif time == 'prev-day': return 'previous day'
+        elif time == 'this-year': return 'this year'
+        elif time == 'this-month': return 'this month'
+        elif time == 'this-week': return 'this week'
+        elif time == 'this-day': return 'this day'
 
     def get_time(self, time: str) -> tuple:
         if time == 'all':
@@ -440,9 +450,10 @@ class Bot:
     async def get_stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         keyboard = [
             [
-                InlineKeyboardButton("Words", callback_data="words"),
-                InlineKeyboardButton("Gifs", callback_data="gifs"),
-                InlineKeyboardButton("Stickers", callback_data="stickers")
+                InlineKeyboardButton("Words", callback_data="word"),
+                InlineKeyboardButton("Total characters", callback_data="char"),
+                InlineKeyboardButton("Gifs", callback_data="gif"),
+                InlineKeyboardButton("Stickers", callback_data="sticker")
             ]
         ]
 
@@ -524,11 +535,13 @@ class Bot:
 
 
     async def show_statistics(self, update: Update, type: str, time: str, user, user_name: str) -> None:
-        if type == 'words':
+        if type == 'word':
             await self.show_statistics_for_words(update, type, time, user, user_name)
-        elif type == 'gifs':
+        if type == 'char':
+            await self.show_statistics_for_characters(update, type, time, user, user_name)
+        elif type == 'gif':
             await self.show_statistics_for_gifs(update, type, time, user, user_name)
-        elif type == 'stickers':
+        elif type == 'sticker':
             await self.show_statistics_for_stickers(update, type, time, user, user_name)
 
     async def show_statistics_for_words(self, update: Update, type: str, time: str, user, user_name: str) -> None:
@@ -539,6 +552,16 @@ class Bot:
         else:
             await update.callback_query.edit_message_text(f"Top 20 {self.get_desc_type(type)} for {self.get_desc_time(time)} for {'everyone' if user_name == 'all' else user_name} (number:word):\n\n" + 
                                                           '\n'.join([f"{word[1]}: {word[0]}" for word in words]))
+
+        await update.callback_query.answer()
+
+    async def show_statistics_for_characters(self, update: Update, type: str, time: str, user, user_name: str) -> None:
+        start, end = self.get_time(time)
+        char_num = self.get_stats_for_characters(update.callback_query.message.chat_id, user, start, end)
+        if char_num is None or char_num == 0:
+            await update.callback_query.edit_message_text(f"{'No one' if user_name == 'all' else user_name} has not said any word during {self.get_desc_time(time)}")
+        else:
+            await update.callback_query.edit_message_text(f"Total {self.get_desc_type(type)} sent for {self.get_desc_time(time)} for {'everyone' if user_name == 'all' else user_name}: {char_num}")
 
         await update.callback_query.answer()
 

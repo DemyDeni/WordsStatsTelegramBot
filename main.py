@@ -46,9 +46,6 @@ class Bot:
         self.app.add_handler(CommandHandler("stats", self.get_stats_command))
         self.app.add_handler(CallbackQueryHandler(self.get_stats_buttons))
 
-        self.app.add_handler(CommandHandler('stats_gif', self.get_stats_for_gif_command))
-        self.app.add_handler(CommandHandler('stats_sticker', self.get_stats_for_sticker_command))
-
         self.app.add_handler(ChatMemberHandler(self.process_new_group_members, Update.chat_member))
         self.app.add_handler(MessageHandler(TEXT | VIA_BOT, self.process_text))
         self.app.add_handler(MessageHandler(ANIMATION, self.process_gif))
@@ -238,14 +235,17 @@ class Bot:
             print(datetime.now(), f'Cannot get stats for gifs for chat {chat_id}: {e}')
             return None
 
-    def get_stats_for_sticker(self, chat_id: int):
+    def get_stats_for_sticker(self, chat_id: int, user_id: int, start: datetime, end: datetime):
         try:
             cursor = self.db.cursor()
-            cursor.execute('SELECT StickerUniqueID,StickerSetName,COUNT(*) FROM Stickers JOIN Messages ON Stickers.MessageID=Messages.MessageID WHERE Messages.ChatID=%s GROUP BY StickerUniqueID,StickerSetName ORDER BY 3 DESC LIMIT 5;', (chat_id,))
+            if user_id is None:
+                cursor.execute('SELECT StickerUniqueID,StickerSetName,COUNT(*) FROM Stickers s JOIN Messages m ON s.MessageID=m.MessageID WHERE m.ChatID=%s AND m.Date>=%s AND m.Date<=%s GROUP BY StickerUniqueID,StickerSetName ORDER BY 3 DESC LIMIT 5;', (chat_id, start, end))
+            else:
+                cursor.execute('SELECT StickerUniqueID,StickerSetName,COUNT(*) FROM Stickers s JOIN Messages m ON s.MessageID=m.MessageID WHERE m.ChatID=%s AND m.UserID=%s AND m.Date>=%s AND m.Date<=%s GROUP BY StickerUniqueID,StickerSetName ORDER BY 3 DESC LIMIT 5;', (chat_id, user_id, start, end))
             result = cursor.fetchall()
             return result
         except Exception as e:
-            print(datetime.now(), f'Cannot get stats for stickers for chat {chat_id}: {e}')
+            print(datetime.now(), f'Cannot get stats for stickers for chat {chat_id}, user {user_id} before {start} and {end}: {e}')
             return None
     # endregion
 
@@ -384,17 +384,6 @@ class Bot:
                 anim = Animation(file_unique_id=gif[1], file_id=gif_id.file_id, duration=gif[3], height=gif[4], width=gif[5])
                 await message.reply_animation(anim, caption=f'Used {gif[0]} times')
 
-    async def get_stats_for_sticker_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        stickers = self.get_stats_for_sticker(update.message.chat_id)
-        if stickers is None:
-            await update.message.reply_text('No stickers sent')
-        else:
-            message = await update.message.reply_text('Top 5 stickers:\n\n' + '\n'.join([f'Used {stk[2]} times' for stk in stickers]))
-            for sticker in stickers:
-                sticker_set = await self.app.bot.get_sticker_set(sticker[1])
-                real_sticker = [stk for stk in sticker_set.stickers if stk.file_unique_id == sticker[0]][0]
-                await message.reply_sticker(real_sticker)
-
     def get_desc_type(self, type: str) -> str:
         return type
 
@@ -478,9 +467,36 @@ class Bot:
             state_user.append(state_user_pages)
         await update.callback_query.edit_message_text(text=f"Get top {self.get_desc_type(type)} for {self.get_desc_time(time)} for:", reply_markup=InlineKeyboardMarkup(state_user))
 
+
     async def show_statistics(self, update: Update, type: str, time: str, user) -> None:
+        if type == 'words':
+            await self.show_statistics_for_words(update, type, time, user)
+        elif type == 'gifs':
+            await self.show_statistics_for_gifs(update, type, time, user)
+        elif type == 'stickers':
+            await self.show_statistics_for_stickers(update, type, time, user)
+
+    async def show_statistics_for_words(self, update: Update, type: str, time: str, user) -> None:
         await update.callback_query.answer()
-        await update.callback_query.edit_message_text(f"type {type}, time {time}, user {user}")
+
+    async def show_statistics_for_gifs(self, update: Update, type: str, time: str, user) -> None:
+        await update.callback_query.answer()
+
+    async def show_statistics_for_stickers(self, update: Update, type: str, time: str, user) -> None:
+        #TODO: get correct time
+        stickers = self.get_stats_for_sticker(update.callback_query.message.chat_id, user, datetime.min, datetime.max)
+        if stickers is None:
+            await update.callback_query.edit_message_text('No stickers sent yet')
+        if len(stickers) == 0:
+            await update.callback_query.edit_message_text('User has not sent any sticker yet')
+        else:
+            message = await update.callback_query.edit_message_text('Top 5 stickers:\n\n' + '\n'.join([f'Used {stk[2]} times' for stk in stickers]))
+            for sticker in stickers:
+                sticker_set = await self.app.bot.get_sticker_set(sticker[1])
+                real_sticker = [stk for stk in sticker_set.stickers if stk.file_unique_id == sticker[0]][0]
+                await message.reply_sticker(real_sticker)
+
+        await update.callback_query.answer()
     # endregion
 
 

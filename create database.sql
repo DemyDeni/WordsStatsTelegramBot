@@ -9,6 +9,7 @@ CREATE TABLE Settings(
     IgnoreGif BIT,
     IgnoreStickers BIT,
     IgnoreChannelPosts BIT,
+    ShowNames BIT,
     PRIMARY KEY (ChatID)
 );
 

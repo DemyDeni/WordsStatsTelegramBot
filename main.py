@@ -474,9 +474,9 @@ class Bot:
 
         state_user_pages = []
         if page != 0:
-            state_user_pages.append([InlineKeyboardButton("<-", callback_data=f"{type}|{time}|page_{page - 1}")])
-        if offset + users_per_page <= users_num:
-            state_user_pages.append([InlineKeyboardButton("->", callback_data=f"{type}|{time}|page_{page + 1}")])
+            state_user_pages.append(InlineKeyboardButton("<", callback_data=f"{type}|{time}|page_{page - 1}"))
+        if offset + users_per_page < users_num:
+            state_user_pages.append(InlineKeyboardButton(">", callback_data=f"{type}|{time}|page_{page + 1}"))
 
         if len(state_user_pages) > 0:
             state_user.append(state_user_pages)

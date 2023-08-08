@@ -449,21 +449,13 @@ class Bot:
 
 
     async def get_stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        keyboard = [
-            [InlineKeyboardButton("Words", callback_data="word")],
-            [InlineKeyboardButton("Total characters", callback_data="char")],
-            [InlineKeyboardButton("Gifs", callback_data="gif")],
-            [InlineKeyboardButton("Stickers", callback_data="sticker")]
-        ]
-
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text("Get stats for:", reply_markup=reply_markup)
+        await self.show_buttons_for_type_selection(update, True)
 
     async def get_stats_buttons(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         responses = query.data.split('|')
 
-        if len(responses) >= 1: # if type chosen
+        if len(responses) >= 1 and responses[0] != 'back': # if type chosen
             type = responses[0]
             if len(responses) >= 2: # if time chosen
                 time = responses[1]
@@ -481,9 +473,23 @@ class Bot:
                     await self.show_buttons_for_entity_selection(update, type, time)
             else:
                 await self.show_buttons_for_time_selection(update, type)
+        else:
+            await self.show_buttons_for_type_selection(update, False)
+
+
+    async def show_buttons_for_type_selection(self, update: Update, first_time) -> None:
+        state_type = [
+            [InlineKeyboardButton("Words", callback_data="word")],
+            [InlineKeyboardButton("Total characters", callback_data="char")],
+            [InlineKeyboardButton("Gifs", callback_data="gif")],
+            [InlineKeyboardButton("Stickers", callback_data="sticker")]
+        ]
+        if first_time:
+            await update.message.reply_text("Get stats for:", reply_markup=InlineKeyboardMarkup(state_type))
+        else:
+            await update.callback_query.edit_message_text(text="Get stats for:", reply_markup=InlineKeyboardMarkup(state_type))
 
     async def show_buttons_for_time_selection(self, update: Update, type: str) -> None:
-        #TODO: add buttons back
         state_time = [
             [InlineKeyboardButton("All time", callback_data=type + "|all")],
             [InlineKeyboardButton("Last year", callback_data=type + "|last-year")],
@@ -497,15 +503,16 @@ class Bot:
             [InlineKeyboardButton("This year", callback_data=type + "|this-year")],
             [InlineKeyboardButton("This month", callback_data=type + "|this-month")],
             [InlineKeyboardButton("This week", callback_data=type + "|this-week")],
-            [InlineKeyboardButton("This day", callback_data=type + "|this-day")]
+            [InlineKeyboardButton("This day", callback_data=type + "|this-day")],
+            [InlineKeyboardButton("< Back", callback_data="back")],
         ]
         await update.callback_query.edit_message_text(text=f"Get top {self.get_desc_type(type)} for:", reply_markup=InlineKeyboardMarkup(state_time))
 
     async def show_buttons_for_entity_selection(self, update: Update, type: str, time: str) -> None:
-        #TODO: add buttons back
         state_entity = [
             [InlineKeyboardButton("All", callback_data=f"{type}|{time}|all")],
-            [InlineKeyboardButton("User", callback_data=f"{type}|{time}|page_0")]
+            [InlineKeyboardButton("User", callback_data=f"{type}|{time}|page_0")],
+            [InlineKeyboardButton("< Back", callback_data=f"{type}")]
         ]
         await update.callback_query.edit_message_text(text=f"Get top {self.get_desc_type(type)} for {self.get_desc_time(time)} for:", reply_markup=InlineKeyboardMarkup(state_entity))
 
@@ -517,7 +524,6 @@ class Bot:
         users = self.get_users(update.callback_query.message.chat_id, users_per_page, offset)
         users_num = self.get_user_num(update.callback_query.message.chat_id)
 
-        #TODO: add buttons back
         state_user = [
             [InlineKeyboardButton(user[2], callback_data=f"{type}|{time}|user_{user[0]}_{user[2]}")] for user in users
         ]
@@ -530,6 +536,8 @@ class Bot:
 
         if len(state_user_pages) > 0:
             state_user.append(state_user_pages)
+        
+        state_user.append([InlineKeyboardButton("< Back", callback_data=f"{type}|{time}")])
         await update.callback_query.edit_message_text(text=f"Get top {self.get_desc_type(type)} for {self.get_desc_time(time)} for:", reply_markup=InlineKeyboardMarkup(state_user))
 
 

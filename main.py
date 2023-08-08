@@ -7,6 +7,7 @@ import mysql.connector
 from mysql.connector import MySQLConnection
 from dotenv import load_dotenv
 from datetime import datetime, timezone
+from dateutil.relativedelta import relativedelta, MO
 import re
 
 
@@ -391,6 +392,33 @@ class Bot:
         #TODO: prettify time
         return time
 
+    def get_time(self, time: str) -> tuple:
+        if time == 'all':
+            return (datetime.min, datetime.max)
+        if time == 'last-year':
+            return (datetime.utcnow() - relativedelta(years=1), datetime.utcnow())
+        if time == 'last-month':
+            return (datetime.utcnow() - relativedelta(months=1), datetime.utcnow())
+        if time == 'last-week':
+            return (datetime.utcnow() - relativedelta(weeks=1), datetime.utcnow())
+        if time == 'last-day':
+            return (datetime.utcnow() - relativedelta(days=1), datetime.utcnow())
+        if time == 'prev-year':
+            return (datetime.utcnow() - relativedelta(years=1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0), datetime.utcnow() - relativedelta(month=1, day=1, hour=0, minute=0, second=0, microsecond=0))
+        if time == 'prev-month':
+            return (datetime.utcnow() - relativedelta(months=1, day=1, hour=0, minute=0, second=0, microsecond=0), datetime.utcnow() - relativedelta(day=1, hour=0, minute=0, second=0, microsecond=0))
+        if time == 'prev-week':
+            return (datetime.utcnow() - relativedelta(weeks=1, weekday=MO(-1), hour=0, minute=0, second=0, microsecond=0), datetime.utcnow() - relativedelta(weekday=MO(-1), hour=0, minute=0, second=0, microsecond=0))
+        if time == 'prev-day':
+            return (datetime.utcnow() - relativedelta(days=1, hour=0, minute=0, second=0, microsecond=0), datetime.utcnow() - relativedelta(hour=0, minute=0, second=0, microsecond=0))
+        if time == 'this-year':
+            return (datetime.utcnow() - relativedelta(month=1, day=1, hour=0, minute=0, second=0, microsecond=0), datetime.max)
+        if time == 'this-month':
+            return (datetime.utcnow() - relativedelta(day=1, hour=0, minute=0, second=0, microsecond=0), datetime.max)
+        if time == 'this-week':
+            return (datetime.utcnow() - relativedelta(weekday=MO(-1), hour=0, minute=0, second=0, microsecond=0), datetime.max)
+        if time == 'this-day':
+            return (datetime.utcnow() - relativedelta(hour=0, minute=0, second=0, microsecond=0), datetime.max)
 
     async def get_stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         keyboard = [
@@ -415,9 +443,11 @@ class Bot:
                 if len(responses) >= 3: # if entity chosen
                     user = responses[2]
                     if user == 'all': # if all users chosen
-                        await self.show_statistics(update, type, time, None)
+                        await self.show_statistics(update, type, time, None, 'all')
                     elif user.startswith('user_'): # if particular user chosen
-                        await self.show_statistics(update, type, time, int(user[5:])) # remove 'user_' to extract id
+                        user_id = user.split('_')[1] # extract id
+                        user_name = user[6+len(user_id):] # remove 'user_' + user id to extract name (that may include '_')
+                        await self.show_statistics(update, type, time, int(user_id), user_name)
                     else:
                         await self.show_buttons_for_user_selection(update, type, time, user)
                 else:
@@ -432,7 +462,15 @@ class Bot:
             [InlineKeyboardButton("Last year", callback_data=type + "|last-year")],
             [InlineKeyboardButton("Last month", callback_data=type + "|last-month")],
             [InlineKeyboardButton("Last week", callback_data=type + "|last-week")],
-            [InlineKeyboardButton("Last day", callback_data=type + "|last-day")]
+            [InlineKeyboardButton("Last day", callback_data=type + "|last-day")],
+            [InlineKeyboardButton("Previous year", callback_data=type + "|prev-year")],
+            [InlineKeyboardButton("Previous month", callback_data=type + "|prev-month")],
+            [InlineKeyboardButton("Previous week", callback_data=type + "|prev-week")],
+            [InlineKeyboardButton("Previous day", callback_data=type + "|prev-day")],
+            [InlineKeyboardButton("This year", callback_data=type + "|this-year")],
+            [InlineKeyboardButton("This month", callback_data=type + "|this-month")],
+            [InlineKeyboardButton("This week", callback_data=type + "|this-week")],
+            [InlineKeyboardButton("This day", callback_data=type + "|this-day")]
         ]
         await update.callback_query.edit_message_text(text=f"Get top {self.get_desc_type(type)} for:", reply_markup=InlineKeyboardMarkup(state_time))
 
@@ -454,7 +492,7 @@ class Bot:
 
         #TODO: add buttons back
         state_user = [
-            [InlineKeyboardButton(user[2], callback_data=f"{type}|{time}|user_{user[0]}")] for user in users
+            [InlineKeyboardButton(user[2], callback_data=f"{type}|{time}|user_{user[0]}_{user[2]}")] for user in users
         ]
 
         state_user_pages = []
@@ -468,29 +506,29 @@ class Bot:
         await update.callback_query.edit_message_text(text=f"Get top {self.get_desc_type(type)} for {self.get_desc_time(time)} for:", reply_markup=InlineKeyboardMarkup(state_user))
 
 
-    async def show_statistics(self, update: Update, type: str, time: str, user) -> None:
+    async def show_statistics(self, update: Update, type: str, time: str, user, user_name: str) -> None:
         if type == 'words':
-            await self.show_statistics_for_words(update, type, time, user)
+            await self.show_statistics_for_words(update, type, time, user, user_name)
         elif type == 'gifs':
-            await self.show_statistics_for_gifs(update, type, time, user)
+            await self.show_statistics_for_gifs(update, type, time, user, user_name)
         elif type == 'stickers':
-            await self.show_statistics_for_stickers(update, type, time, user)
+            await self.show_statistics_for_stickers(update, type, time, user, user_name)
 
-    async def show_statistics_for_words(self, update: Update, type: str, time: str, user) -> None:
+    async def show_statistics_for_words(self, update: Update, type: str, time: str, user, user_name: str) -> None:
         await update.callback_query.answer()
 
-    async def show_statistics_for_gifs(self, update: Update, type: str, time: str, user) -> None:
+    async def show_statistics_for_gifs(self, update: Update, type: str, time: str, user, user_name: str) -> None:
         await update.callback_query.answer()
 
-    async def show_statistics_for_stickers(self, update: Update, type: str, time: str, user) -> None:
-        #TODO: get correct time
-        stickers = self.get_stats_for_sticker(update.callback_query.message.chat_id, user, datetime.min, datetime.max)
+    async def show_statistics_for_stickers(self, update: Update, type: str, time: str, user, user_name: str) -> None:
+        start, end = self.get_time(time)
+        stickers = self.get_stats_for_sticker(update.callback_query.message.chat_id, user, start, end)
         if stickers is None:
             await update.callback_query.edit_message_text('No stickers sent yet')
         if len(stickers) == 0:
             await update.callback_query.edit_message_text('User has not sent any sticker yet')
         else:
-            message = await update.callback_query.edit_message_text('Top 5 stickers:\n\n' + '\n'.join([f'Used {stk[2]} times' for stk in stickers]))
+            message = await update.callback_query.edit_message_text(f"Top 5 {self.get_desc_type(type)} for {self.get_desc_time(time)} for {user_name}:\n\n" + '\n'.join([f'Used {stk[2]} times' for stk in stickers]))
             for sticker in stickers:
                 sticker_set = await self.app.bot.get_sticker_set(sticker[1])
                 real_sticker = [stk for stk in sticker_set.stickers if stk.file_unique_id == sticker[0]][0]

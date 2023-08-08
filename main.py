@@ -230,9 +230,9 @@ class Bot:
         try:
             cursor = self.db.cursor()
             if user_id is None:
-                cursor.execute('SELECT GifCount,GifUniqueID,GifID,Duration,Height,Width FROM(SELECT g.*,ROW_NUMBER()OVER(PARTITION BY GifUniqueID ORDER BY MessageID) AS row_num,GifCount FROM Gifs g INNER JOIN(SELECT GifUniqueID,COUNT(*) AS GifCount FROM Gifs g JOIN Messages m ON g.MessageID=m.MessageID WHERE m.ChatID=%s AND m.Date>=%s AND m.Date<=%s  GROUP BY GifUniqueID ORDER BY GifCount DESC LIMIT 5)TopGifs ON G.GifUniqueID=TopGifs.GifUniqueID)g WHERE g.row_num=1 ORDER BY GifCount DESC;', (chat_id,start,end))
+                cursor.execute('SELECT GifCount,GifUniqueID,GifID,Duration,Height,Width FROM(SELECT g.*,ROW_NUMBER()OVER(PARTITION BY GifUniqueID ORDER BY MessageID) AS row_num,GifCount FROM Gifs g INNER JOIN(SELECT GifUniqueID,COUNT(*) AS GifCount FROM Gifs g JOIN Messages m ON g.MessageID=m.MessageID WHERE m.ChatID=%s AND m.Date>=%s AND m.Date<=%s  GROUP BY GifUniqueID ORDER BY GifCount DESC LIMIT 3)TopGifs ON G.GifUniqueID=TopGifs.GifUniqueID)g WHERE g.row_num=1 ORDER BY GifCount DESC;', (chat_id,start,end))
             else:
-                cursor.execute('SELECT GifCount,GifUniqueID,GifID,Duration,Height,Width FROM(SELECT g.*,ROW_NUMBER()OVER(PARTITION BY GifUniqueID ORDER BY MessageID) AS row_num,GifCount FROM Gifs g INNER JOIN(SELECT GifUniqueID,COUNT(*) AS GifCount FROM Gifs g JOIN Messages m ON g.MessageID=m.MessageID WHERE m.ChatID=%s AND m.UserID=%s AND m.Date>=%s AND m.Date<=%s GROUP BY GifUniqueID ORDER BY GifCount DESC LIMIT 5)TopGifs ON G.GifUniqueID=TopGifs.GifUniqueID)g WHERE g.row_num=1 ORDER BY GifCount DESC;', (chat_id,user_id,start,end))
+                cursor.execute('SELECT GifCount,GifUniqueID,GifID,Duration,Height,Width FROM(SELECT g.*,ROW_NUMBER()OVER(PARTITION BY GifUniqueID ORDER BY MessageID) AS row_num,GifCount FROM Gifs g INNER JOIN(SELECT GifUniqueID,COUNT(*) AS GifCount FROM Gifs g JOIN Messages m ON g.MessageID=m.MessageID WHERE m.ChatID=%s AND m.UserID=%s AND m.Date>=%s AND m.Date<=%s GROUP BY GifUniqueID ORDER BY GifCount DESC LIMIT 3)TopGifs ON G.GifUniqueID=TopGifs.GifUniqueID)g WHERE g.row_num=1 ORDER BY GifCount DESC;', (chat_id,user_id,start,end))
             result = cursor.fetchall()
             return result
         except Exception as e:
@@ -243,9 +243,9 @@ class Bot:
         try:
             cursor = self.db.cursor()
             if user_id is None:
-                cursor.execute('SELECT StickerUniqueID,StickerSetName,COUNT(*) FROM Stickers s JOIN Messages m ON s.MessageID=m.MessageID WHERE m.ChatID=%s AND m.Date>=%s AND m.Date<=%s GROUP BY StickerUniqueID,StickerSetName ORDER BY 3 DESC LIMIT 5;', (chat_id, start, end))
+                cursor.execute('SELECT StickerUniqueID,StickerSetName,COUNT(*) FROM Stickers s JOIN Messages m ON s.MessageID=m.MessageID WHERE m.ChatID=%s AND m.Date>=%s AND m.Date<=%s GROUP BY StickerUniqueID,StickerSetName ORDER BY 3 DESC LIMIT 3;', (chat_id, start, end))
             else:
-                cursor.execute('SELECT StickerUniqueID,StickerSetName,COUNT(*) FROM Stickers s JOIN Messages m ON s.MessageID=m.MessageID WHERE m.ChatID=%s AND m.UserID=%s AND m.Date>=%s AND m.Date<=%s GROUP BY StickerUniqueID,StickerSetName ORDER BY 3 DESC LIMIT 5;', (chat_id, user_id, start, end))
+                cursor.execute('SELECT StickerUniqueID,StickerSetName,COUNT(*) FROM Stickers s JOIN Messages m ON s.MessageID=m.MessageID WHERE m.ChatID=%s AND m.UserID=%s AND m.Date>=%s AND m.Date<=%s GROUP BY StickerUniqueID,StickerSetName ORDER BY 3 DESC LIMIT 3;', (chat_id, user_id, start, end))
             result = cursor.fetchall()
             return result
         except Exception as e:
@@ -527,7 +527,7 @@ class Bot:
         if gifs is None or len(gifs) == 0:
             await update.callback_query.edit_message_text(f"{'No one' if user_name == 'all' else user_name} has not sent any gif during {self.get_desc_time(time)}")
         else:
-            message = await update.callback_query.edit_message_text(f"Top 5 {self.get_desc_type(type)} for {self.get_desc_time(time)} for {'everyone' if user_name == 'all' else user_name}:")
+            message = await update.callback_query.edit_message_text(f"Top 3 {self.get_desc_type(type)} for {self.get_desc_time(time)} for {'everyone' if user_name == 'all' else user_name}:")
             for gif in gifs:
                 gif_id = await self.app.bot.get_file(gif[2])
                 anim = Animation(file_unique_id=gif[1], file_id=gif_id.file_id, duration=gif[3], height=gif[4], width=gif[5])
@@ -541,7 +541,7 @@ class Bot:
         if stickers is None or len(stickers) == 0:
             await update.callback_query.edit_message_text(f"{'No one' if user_name == 'all' else user_name} has not sent any sticker during {self.get_desc_time(time)}")
         else:
-            message = await update.callback_query.edit_message_text(f"Top 5 {self.get_desc_type(type)} for {self.get_desc_time(time)} for {'everyone' if user_name == 'all' else user_name}:\n\n" + '\n'.join([f'Used {stk[2]} times' for stk in stickers]))
+            message = await update.callback_query.edit_message_text(f"Top 3 {self.get_desc_type(type)} for {self.get_desc_time(time)} for {'everyone' if user_name == 'all' else user_name}:\n\n" + '\n'.join([f'Used {stk[2]} times' for stk in stickers]))
             for sticker in stickers:
                 sticker_set = await self.app.bot.get_sticker_set(sticker[1])
                 real_sticker = [stk for stk in sticker_set.stickers if stk.file_unique_id == sticker[0]][0]

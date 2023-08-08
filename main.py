@@ -287,8 +287,9 @@ class Bot:
 
     # region commands
     async def shutdown_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        a = datetime.now(timezone.utc) - update.message.date
-        if update.message.from_user.id == self.admin_id and a.total_seconds() / 60 < 1:
+        message_from = datetime.now(timezone.utc) - update.message.date
+        # check if command was sent by admin and 1 minute not passed (to prevent continuous shutting down)
+        if update.message.from_user.id == self.admin_id and message_from.total_seconds() / 60 < 1:
             await update.message.reply_text('Shutting down')
             print(datetime.now(), 'Shutting down')
             os.kill(os.getpid(), 15)

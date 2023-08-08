@@ -450,12 +450,10 @@ class Bot:
 
     async def get_stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         keyboard = [
-            [
-                InlineKeyboardButton("Words", callback_data="word"),
-                InlineKeyboardButton("Total characters", callback_data="char"),
-                InlineKeyboardButton("Gifs", callback_data="gif"),
-                InlineKeyboardButton("Stickers", callback_data="sticker")
-            ]
+            [InlineKeyboardButton("Words", callback_data="word")],
+            [InlineKeyboardButton("Total characters", callback_data="char")],
+            [InlineKeyboardButton("Gifs", callback_data="gif")],
+            [InlineKeyboardButton("Stickers", callback_data="sticker")]
         ]
 
         reply_markup = InlineKeyboardMarkup(keyboard)

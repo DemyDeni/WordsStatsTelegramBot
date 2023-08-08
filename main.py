@@ -67,6 +67,7 @@ class Bot:
         #TODO: save queries to get stats as functions in MySQL
         #TODO: add 1 minute limit between requests to prevent time out
         #TODO: choose how much top words to show
+        #TODO: count replies
 
 
     def start(self):
@@ -203,6 +204,26 @@ class Bot:
             return result
         except Exception as e:
             print(datetime.now(), f'Cannot get settings for chat {chat_id}: {e}')
+            return None
+
+    def get_user_num(self, chat_id: int):
+        try:
+            cursor = self.db.cursor()
+            cursor.execute('SELECT COUNT(DISTINCT UserID) FROM Messages WHERE ChatID=%s;', (chat_id,))
+            result = cursor.fetchone()
+            return result[0]
+        except Exception as e:
+            print(datetime.now(), f'Cannot get users num for chat {chat_id}: {e}')
+            return None
+
+    def get_users(self, chat_id: int, num: int, offset: int):
+        try:
+            cursor = self.db.cursor()
+            cursor.execute('SELECT u.UserID,u.Nickname,u.FirstName FROM Users u JOIN(SELECT DISTINCT UserID FROM Messages WHERE ChatID=%s) t ON t.UserId=u.UserID ORDER BY u.FirstName DESC LIMIT %s OFFSET %s;', (chat_id,num, offset))
+            result = cursor.fetchall()
+            return result
+        except Exception as e:
+            print(datetime.now(), f'Cannot get {num} users for chat {chat_id} with offset {offset}: {e}')
             return None
     # endregion
 
@@ -377,15 +398,20 @@ class Bot:
     def split_stats(self, s: str) -> list:
         return s.split('|')
 
-    def split_stats_desc(self, s: str) -> str:
-        return s.split('-')[1].lower()
+    def get_desc_type(self, type: str) -> str:
+        return type
+
+    def get_desc_time(self, time: str) -> str:
+        #TODO: prettify time
+        return time
+
 
     async def get_stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         keyboard = [
             [
-                InlineKeyboardButton("Words", callback_data="type-words"),
-                InlineKeyboardButton("Gifs", callback_data="type-gifs"),
-                InlineKeyboardButton("Stickers", callback_data="type-stickers")
+                InlineKeyboardButton("Words", callback_data="words"),
+                InlineKeyboardButton("Gifs", callback_data="gifs"),
+                InlineKeyboardButton("Stickers", callback_data="stickers")
             ]
         ]
 
@@ -398,34 +424,67 @@ class Bot:
         responses = self.split_stats(response)
 
         if len(responses) >= 1: # if type chosen
+            type = responses[0]
             if len(responses) >= 2: # if time chosen
-                if len(responses) >= 3: # if user chosen
-                    if responses[2] == 'user-all':
-                        #TODO: get statistics
-                        pass
+                time = responses[1]
+                if len(responses) >= 3: # if entity chosen
+                    user = responses[2]
+                    if user == 'all': # if all users chosen
+                        await self.show_statistics(update, type, time, None)
+                    elif user.startswith('user_'): # if particular user chosen
+                        await self.show_statistics(update, type, time, int(user[5:])) # remove 'user_' to extract id
                     else:
-                        #TODO: get users and then statistics
-                        pass
+                        await self.show_buttons_for_user_selection(update, type, time, user)
                 else:
-                    # add buttons back
-                    state_user = [
-                        [InlineKeyboardButton("All", callback_data=response + "|user-all")],
-                        [InlineKeyboardButton("User", callback_data=response + "|user-user")]
-                    ]
-                    await query.edit_message_text(text=f"Get top 5 {self.split_stats_desc(responses[0])} for:", reply_markup=InlineKeyboardMarkup(state_user))
+                    await self.show_buttons_for_entity_selection(update, type, time)
             else:
-                # add buttons back
-                state_time = [
-                    [InlineKeyboardButton("All time", callback_data=response + "|time-all")],
-                    [InlineKeyboardButton("Last year", callback_data=response + "|time-year")],
-                    [InlineKeyboardButton("Last month", callback_data=response + "|time-month")],
-                    [InlineKeyboardButton("Last week", callback_data=response + "|time-week")],
-                    [InlineKeyboardButton("Last day", callback_data=response + "|time-day")]
-                ]
-                await query.edit_message_text(text=f"Get top 5 {self.split_stats_desc(responses[0])} for {self.split_stats_desc(responses[1])}:", reply_markup=InlineKeyboardMarkup(state_time))
-        else:
-            await query.answer()
-            await query.edit_message_text(text='An error occurred. Please try again')
+                await self.show_buttons_for_time_selection(update, type)
+
+    async def show_buttons_for_time_selection(self, update: Update, type: str) -> None:
+        #TODO: add buttons back
+        state_time = [
+            [InlineKeyboardButton("All time", callback_data=type + "|all")],
+            [InlineKeyboardButton("Last year", callback_data=type + "|last-year")],
+            [InlineKeyboardButton("Last month", callback_data=type + "|last-month")],
+            [InlineKeyboardButton("Last week", callback_data=type + "|last-week")],
+            [InlineKeyboardButton("Last day", callback_data=type + "|last-day")]
+        ]
+        await update.callback_query.edit_message_text(text=f"Get top {self.get_desc_type(type)} for:", reply_markup=InlineKeyboardMarkup(state_time))
+
+    async def show_buttons_for_entity_selection(self, update: Update, type: str, time: str) -> None:
+        #TODO: add buttons back
+        state_entity = [
+            [InlineKeyboardButton("All", callback_data=f"{type}|{time}|all")],
+            [InlineKeyboardButton("User", callback_data=f"{type}|{time}|page_0")]
+        ]
+        await update.callback_query.edit_message_text(text=f"Get top {self.get_desc_type(type)} for {self.get_desc_time(time)} for:", reply_markup=InlineKeyboardMarkup(state_entity))
+
+    async def show_buttons_for_user_selection(self, update: Update, type: str, time: str, user: str) -> None:
+        users_per_page = 10
+        page = int(user.split('_')[1])
+        offset = page * users_per_page
+
+        users = self.get_users(update.callback_query.message.chat_id, users_per_page, offset)
+        users_num = self.get_user_num(update.callback_query.message.chat_id)
+
+        #TODO: add buttons back
+        state_user = [
+            [InlineKeyboardButton(user[2], callback_data=f"{type}|{time}|user_{user[0]}")] for user in users
+        ]
+
+        state_user_pages = []
+        if page != 0:
+            state_user_pages.append([InlineKeyboardButton("<-", callback_data=f"{type}|{time}|page_{page - 1}")])
+        if offset + users_per_page <= users_num:
+            state_user_pages.append([InlineKeyboardButton("->", callback_data=f"{type}|{time}|page_{page + 1}")])
+
+        if len(state_user_pages) > 0:
+            state_user.append(state_user_pages)
+        await update.callback_query.edit_message_text(text=f"Get top {self.get_desc_type(type)} for {self.get_desc_time(time)} for:", reply_markup=InlineKeyboardMarkup(state_user))
+
+    async def show_statistics(self, update: Update, type: str, time: str, user) -> None:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(f"type {type}, time {time}, user {user}")
     # endregion
 
 

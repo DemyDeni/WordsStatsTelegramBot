@@ -373,13 +373,19 @@ class Bot:
                 sticker_set = await self.app.bot.get_sticker_set(sticker[1])
                 real_sticker = [stk for stk in sticker_set.stickers if stk.file_unique_id == sticker[0]][0]
                 await message.reply_sticker(real_sticker)
-    # endregion
+
+    def split_stats(self, s: str) -> list:
+        return s.split('|')
+
+    def split_stats_desc(self, s: str) -> str:
+        return s.split('-')[1].lower()
 
     async def get_stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         keyboard = [
             [
-                InlineKeyboardButton("All", callback_data="start-all"),
-                InlineKeyboardButton("User", callback_data="start-user")
+                InlineKeyboardButton("Words", callback_data="type-words"),
+                InlineKeyboardButton("Gifs", callback_data="type-gifs"),
+                InlineKeyboardButton("Stickers", callback_data="type-stickers")
             ]
         ]
 
@@ -389,68 +395,39 @@ class Bot:
     async def get_stats_buttons(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         response = query.data
-        responses = response.split('|')
+        responses = self.split_stats(response)
 
-        #TODO: reformat, create mappings using classes, split into methods
-        state_type = [
-            [InlineKeyboardButton("Words", callback_data=response + "|type-word")],
-            [InlineKeyboardButton("Gifs", callback_data=response + "|type-gif")],
-            [InlineKeyboardButton("Stickers", callback_data=response + "|type-sticker")]
-        ]
-
-        state_time = [
-            [InlineKeyboardButton("All time", callback_data=response + "|time-all")],
-            [InlineKeyboardButton("Last year", callback_data=response + "|time-year")],
-            [InlineKeyboardButton("Last month", callback_data=response + "|time-month")],
-            [InlineKeyboardButton("Last week", callback_data=response + "|time-week")],
-            [InlineKeyboardButton("Last day", callback_data=response + "|time-day")]
-        ]
-
-        reply_markup = None
-        if responses[0] == 'start-all':
-            if len(responses) >= 2:
-                if len(responses) >= 3:
-                    if responses[1] == 'type-word':
+        if len(responses) >= 1: # if type chosen
+            if len(responses) >= 2: # if time chosen
+                if len(responses) >= 3: # if user chosen
+                    if responses[2] == 'user-all':
+                        #TODO: get statistics
                         pass
-                    if responses[1] == 'type-gif':
-                        await query.answer()
-                        if responses[2] == 'time-all':
-                            gifs = self.get_stats_for_gif(query.message.chat_id)
-                            if gifs is None:
-                                await query.edit_message_text('No gifs sent')
-                            else:
-                                message = await query.edit_message_text('Top 5 gifs for all users for all time:')
-                                for gif in gifs:
-                                    gif_id = await self.app.bot.get_file(gif[2])
-                                    anim = Animation(file_unique_id=gif[1], file_id=gif_id.file_id, duration=gif[3], height=gif[4], width=gif[5])
-                                    await message.reply_animation(anim, caption=f'Used {gif[0]} times')
-                            return
-                    if responses[1] == 'type-sticker':
-                        await query.answer()
-                        if responses[2] == 'time-all':
-                            stickers = self.get_stats_for_sticker(query.message.chat_id)
-                            if stickers is None:
-                                await query.edit_message_text('No stickers sent')
-                            else:
-                                message = await query.edit_message_text('Top 5 stickers for all users for all time:\n\n' + '\n'.join([f'Used {stk[2]} times' for stk in stickers]))
-                                for sticker in stickers:
-                                    sticker_set = await self.app.bot.get_sticker_set(sticker[1])
-                                    real_sticker = [stk for stk in sticker_set.stickers if stk.file_unique_id == sticker[0]][0]
-                                    await message.reply_sticker(real_sticker)
-                            return
+                    else:
+                        #TODO: get users and then statistics
+                        pass
                 else:
-                    reply_markup = InlineKeyboardMarkup(state_time)
+                    # add buttons back
+                    state_user = [
+                        [InlineKeyboardButton("All", callback_data=response + "|user-all")],
+                        [InlineKeyboardButton("User", callback_data=response + "|user-user")]
+                    ]
+                    await query.edit_message_text(text=f"Get top 5 {self.split_stats_desc(responses[0])} for:", reply_markup=InlineKeyboardMarkup(state_user))
             else:
-                reply_markup = InlineKeyboardMarkup(state_type)
-        elif responses[0] == 'start-user':
-            pass
-
-
-        if reply_markup is None:
+                # add buttons back
+                state_time = [
+                    [InlineKeyboardButton("All time", callback_data=response + "|time-all")],
+                    [InlineKeyboardButton("Last year", callback_data=response + "|time-year")],
+                    [InlineKeyboardButton("Last month", callback_data=response + "|time-month")],
+                    [InlineKeyboardButton("Last week", callback_data=response + "|time-week")],
+                    [InlineKeyboardButton("Last day", callback_data=response + "|time-day")]
+                ]
+                await query.edit_message_text(text=f"Get top 5 {self.split_stats_desc(responses[0])} for {self.split_stats_desc(responses[1])}:", reply_markup=InlineKeyboardMarkup(state_time))
+        else:
             await query.answer()
             await query.edit_message_text(text='An error occurred. Please try again')
-        else:
-            await query.edit_message_text(text='Get stats for:', reply_markup=reply_markup)
+    # endregion
+
 
 
 if __name__ == '__main__':

@@ -395,9 +395,6 @@ class Bot:
                 real_sticker = [stk for stk in sticker_set.stickers if stk.file_unique_id == sticker[0]][0]
                 await message.reply_sticker(real_sticker)
 
-    def split_stats(self, s: str) -> list:
-        return s.split('|')
-
     def get_desc_type(self, type: str) -> str:
         return type
 
@@ -420,8 +417,7 @@ class Bot:
 
     async def get_stats_buttons(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
-        response = query.data
-        responses = self.split_stats(response)
+        responses = query.data.split('|')
 
         if len(responses) >= 1: # if type chosen
             type = responses[0]

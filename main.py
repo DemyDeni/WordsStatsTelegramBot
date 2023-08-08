@@ -226,10 +226,13 @@ class Bot:
     # endregion
 
     # region statistics
-    def get_stats_for_gif(self, chat_id: int):
+    def get_stats_for_gif(self, chat_id: int, user_id: int, start: datetime, end: datetime):
         try:
             cursor = self.db.cursor()
-            cursor.execute('SELECT GifCount,GifUniqueID,GifID,Duration,Height,Width FROM(SELECT g.*,ROW_NUMBER()OVER(PARTITION BY GifUniqueID ORDER BY MessageID) AS row_num,GifCount FROM Gifs g INNER JOIN(SELECT GifUniqueID,COUNT(*) AS GifCount FROM Gifs g JOIN Messages m ON g.MessageID=m.MessageID WHERE m.ChatID=%s GROUP BY GifUniqueID ORDER BY GifCount DESC LIMIT 5)TopGifs ON G.GifUniqueID=TopGifs.GifUniqueID)g WHERE g.row_num=1 ORDER BY GifCount DESC;', (chat_id,))
+            if user_id is None:
+                cursor.execute('SELECT GifCount,GifUniqueID,GifID,Duration,Height,Width FROM(SELECT g.*,ROW_NUMBER()OVER(PARTITION BY GifUniqueID ORDER BY MessageID) AS row_num,GifCount FROM Gifs g INNER JOIN(SELECT GifUniqueID,COUNT(*) AS GifCount FROM Gifs g JOIN Messages m ON g.MessageID=m.MessageID WHERE m.ChatID=%s AND m.Date>=%s AND m.Date<=%s  GROUP BY GifUniqueID ORDER BY GifCount DESC LIMIT 5)TopGifs ON G.GifUniqueID=TopGifs.GifUniqueID)g WHERE g.row_num=1 ORDER BY GifCount DESC;', (chat_id,start,end))
+            else:
+                cursor.execute('SELECT GifCount,GifUniqueID,GifID,Duration,Height,Width FROM(SELECT g.*,ROW_NUMBER()OVER(PARTITION BY GifUniqueID ORDER BY MessageID) AS row_num,GifCount FROM Gifs g INNER JOIN(SELECT GifUniqueID,COUNT(*) AS GifCount FROM Gifs g JOIN Messages m ON g.MessageID=m.MessageID WHERE m.ChatID=%s AND m.UserID=%s AND m.Date>=%s AND m.Date<=%s GROUP BY GifUniqueID ORDER BY GifCount DESC LIMIT 5)TopGifs ON G.GifUniqueID=TopGifs.GifUniqueID)g WHERE g.row_num=1 ORDER BY GifCount DESC;', (chat_id,user_id,start,end))
             result = cursor.fetchall()
             return result
         except Exception as e:
@@ -374,17 +377,6 @@ class Bot:
     # endregion
 
     # region stat commands
-    async def get_stats_for_gif_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        gifs = self.get_stats_for_gif(update.message.chat_id)
-        if gifs is None:
-            await update.message.reply_text('No gifs sent')
-        else:
-            message = await update.message.reply_text('Top 5 gifs:')
-            for gif in gifs:
-                gif_id = await self.app.bot.get_file(gif[2])
-                anim = Animation(file_unique_id=gif[1], file_id=gif_id.file_id, duration=gif[3], height=gif[4], width=gif[5])
-                await message.reply_animation(anim, caption=f'Used {gif[0]} times')
-
     def get_desc_type(self, type: str) -> str:
         return type
 
@@ -419,6 +411,7 @@ class Bot:
             return (datetime.utcnow() - relativedelta(weekday=MO(-1), hour=0, minute=0, second=0, microsecond=0), datetime.max)
         if time == 'this-day':
             return (datetime.utcnow() - relativedelta(hour=0, minute=0, second=0, microsecond=0), datetime.max)
+
 
     async def get_stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         keyboard = [
@@ -518,6 +511,19 @@ class Bot:
         await update.callback_query.answer()
 
     async def show_statistics_for_gifs(self, update: Update, type: str, time: str, user, user_name: str) -> None:
+        start, end = self.get_time(time)
+        gifs = self.get_stats_for_gif(update.callback_query.message.chat_id, user, start, end)
+        if gifs is None:
+            await update.callback_query.edit_message_text('No gifs sent yet')
+        if len(gifs) == 0:
+            await update.callback_query.edit_message_text('User has not sent any gif yet')
+        else:
+            message = await update.callback_query.edit_message_text(f"Top 5 {self.get_desc_type(type)} for {self.get_desc_time(time)} for {user_name}:")
+            for gif in gifs:
+                gif_id = await self.app.bot.get_file(gif[2])
+                anim = Animation(file_unique_id=gif[1], file_id=gif_id.file_id, duration=gif[3], height=gif[4], width=gif[5])
+                await message.reply_animation(anim, caption=f'Used {gif[0]} times')
+        
         await update.callback_query.answer()
 
     async def show_statistics_for_stickers(self, update: Update, type: str, time: str, user, user_name: str) -> None:

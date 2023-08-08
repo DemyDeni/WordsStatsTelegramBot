@@ -514,7 +514,7 @@ class Bot:
             [InlineKeyboardButton("User", callback_data=f"{type}|{time}|page_0")],
             [InlineKeyboardButton("< Back", callback_data=f"{type}")]
         ]
-        await update.callback_query.edit_message_text(text=f"Get top {self.get_desc_type(type)} for {self.get_desc_time(time)} for:", reply_markup=InlineKeyboardMarkup(state_entity))
+        await update.callback_query.edit_message_text(text=f"Get top {self.get_desc_type(type)} during {self.get_desc_time(time)} for:", reply_markup=InlineKeyboardMarkup(state_entity))
 
     async def show_buttons_for_user_selection(self, update: Update, type: str, time: str, user: str) -> None:
         users_per_page = 10
@@ -538,7 +538,7 @@ class Bot:
             state_user.append(state_user_pages)
         
         state_user.append([InlineKeyboardButton("< Back", callback_data=f"{type}|{time}")])
-        await update.callback_query.edit_message_text(text=f"Get top {self.get_desc_type(type)} for {self.get_desc_time(time)} for:", reply_markup=InlineKeyboardMarkup(state_user))
+        await update.callback_query.edit_message_text(text=f"Get top {self.get_desc_type(type)} during {self.get_desc_time(time)} for:", reply_markup=InlineKeyboardMarkup(state_user))
 
 
     async def show_statistics(self, update: Update, type: str, time: str, user, user_name: str) -> None:
@@ -557,7 +557,7 @@ class Bot:
         if words is None or len(words) == 0:
             await update.callback_query.edit_message_text(f"{'No one' if user_name == 'all' else user_name} has not said any word during {self.get_desc_time(time)}")
         else:
-            await update.callback_query.edit_message_text(f"Top 20 {self.get_desc_type(type)} for {self.get_desc_time(time)} for {'everyone' if user_name == 'all' else user_name} (number:word):\n\n" + 
+            await update.callback_query.edit_message_text(f"Top 20 {self.get_desc_type(type)} during {self.get_desc_time(time)} for {'everyone' if user_name == 'all' else user_name} (No: word):\n\n" + 
                                                           '\n'.join([f"{word[1]}: {word[0]}" for word in words]))
 
         await update.callback_query.answer()
@@ -568,7 +568,7 @@ class Bot:
         if char_num is None or char_num == 0:
             await update.callback_query.edit_message_text(f"{'No one' if user_name == 'all' else user_name} has not said any word during {self.get_desc_time(time)}")
         else:
-            await update.callback_query.edit_message_text(f"Total {self.get_desc_type(type)} sent for {self.get_desc_time(time)} for {'everyone' if user_name == 'all' else user_name}: {char_num}")
+            await update.callback_query.edit_message_text(f"Total {self.get_desc_type(type)} sent during {self.get_desc_time(time)} for {'everyone' if user_name == 'all' else user_name}: {char_num}")
 
         await update.callback_query.answer()
 
@@ -578,7 +578,7 @@ class Bot:
         if gifs is None or len(gifs) == 0:
             await update.callback_query.edit_message_text(f"{'No one' if user_name == 'all' else user_name} has not sent any gif during {self.get_desc_time(time)}")
         else:
-            message = await update.callback_query.edit_message_text(f"Top 3 {self.get_desc_type(type)} for {self.get_desc_time(time)} for {'everyone' if user_name == 'all' else user_name}:")
+            message = await update.callback_query.edit_message_text(f"Top 3 {self.get_desc_type(type)} during {self.get_desc_time(time)} for {'everyone' if user_name == 'all' else user_name}:")
             for gif in gifs:
                 gif_id = await self.app.bot.get_file(gif[2])
                 anim = Animation(file_unique_id=gif[1], file_id=gif_id.file_id, duration=gif[3], height=gif[4], width=gif[5])
@@ -592,7 +592,7 @@ class Bot:
         if stickers is None or len(stickers) == 0:
             await update.callback_query.edit_message_text(f"{'No one' if user_name == 'all' else user_name} has not sent any sticker during {self.get_desc_time(time)}")
         else:
-            message = await update.callback_query.edit_message_text(f"Top 3 {self.get_desc_type(type)} for {self.get_desc_time(time)} for {'everyone' if user_name == 'all' else user_name}:\n\n" + '\n'.join([f'Used {stk[2]} times' for stk in stickers]))
+            message = await update.callback_query.edit_message_text(f"Top 3 {self.get_desc_type(type)} during {self.get_desc_time(time)} for {'everyone' if user_name == 'all' else user_name}:\n\n" + '\n'.join([f'Used {stk[2]} times' for stk in stickers]))
             for sticker in stickers:
                 sticker_set = await self.app.bot.get_sticker_set(sticker[1])
                 real_sticker = [stk for stk in sticker_set.stickers if stk.file_unique_id == sticker[0]][0]

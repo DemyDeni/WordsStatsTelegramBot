@@ -381,8 +381,19 @@ class Bot:
         return type
 
     def get_desc_time(self, time: str) -> str:
-        #TODO: prettify time
-        return time
+        if time == 'all': return 'all time'
+        if time == 'last-year': return 'last year'
+        if time == 'last-month': return 'last month'
+        if time == 'last-week': return 'last week'
+        if time == 'last-day': return 'last day'
+        if time == 'prev-year': return 'previous year'
+        if time == 'prev-month': return 'previous month'
+        if time == 'prev-week': return 'previous week'
+        if time == 'prev-day': return 'previous day'
+        if time == 'this-year': return 'this year'
+        if time == 'this-month': return 'this month'
+        if time == 'this-week': return 'this week'
+        if time == 'this-day': return 'this day'
 
     def get_time(self, time: str) -> tuple:
         if time == 'all':
@@ -513,12 +524,10 @@ class Bot:
     async def show_statistics_for_gifs(self, update: Update, type: str, time: str, user, user_name: str) -> None:
         start, end = self.get_time(time)
         gifs = self.get_stats_for_gif(update.callback_query.message.chat_id, user, start, end)
-        if gifs is None:
-            await update.callback_query.edit_message_text('No gifs sent yet')
-        if len(gifs) == 0:
-            await update.callback_query.edit_message_text('User has not sent any gif yet')
+        if gifs is None or len(gifs) == 0:
+            await update.callback_query.edit_message_text(f"{'No one' if user_name == 'all' else user_name} has not sent any gif during {self.get_desc_time(time)}")
         else:
-            message = await update.callback_query.edit_message_text(f"Top 5 {self.get_desc_type(type)} for {self.get_desc_time(time)} for {user_name}:")
+            message = await update.callback_query.edit_message_text(f"Top 5 {self.get_desc_type(type)} for {self.get_desc_time(time)} for {'everyone' if user_name == 'all' else user_name}:")
             for gif in gifs:
                 gif_id = await self.app.bot.get_file(gif[2])
                 anim = Animation(file_unique_id=gif[1], file_id=gif_id.file_id, duration=gif[3], height=gif[4], width=gif[5])
@@ -529,12 +538,10 @@ class Bot:
     async def show_statistics_for_stickers(self, update: Update, type: str, time: str, user, user_name: str) -> None:
         start, end = self.get_time(time)
         stickers = self.get_stats_for_sticker(update.callback_query.message.chat_id, user, start, end)
-        if stickers is None:
-            await update.callback_query.edit_message_text('No stickers sent yet')
-        if len(stickers) == 0:
-            await update.callback_query.edit_message_text('User has not sent any sticker yet')
+        if stickers is None or len(stickers) == 0:
+            await update.callback_query.edit_message_text(f"{'No one' if user_name == 'all' else user_name} has not sent any sticker during {self.get_desc_time(time)}")
         else:
-            message = await update.callback_query.edit_message_text(f"Top 5 {self.get_desc_type(type)} for {self.get_desc_time(time)} for {user_name}:\n\n" + '\n'.join([f'Used {stk[2]} times' for stk in stickers]))
+            message = await update.callback_query.edit_message_text(f"Top 5 {self.get_desc_type(type)} for {self.get_desc_time(time)} for {'everyone' if user_name == 'all' else user_name}:\n\n" + '\n'.join([f'Used {stk[2]} times' for stk in stickers]))
             for sticker in stickers:
                 sticker_set = await self.app.bot.get_sticker_set(sticker[1])
                 real_sticker = [stk for stk in sticker_set.stickers if stk.file_unique_id == sticker[0]][0]
